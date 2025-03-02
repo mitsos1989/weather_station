@@ -6,10 +6,11 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
 
-app = dash.Dash(__name__)
+# Include Roboto font from Google Fonts
+external_stylesheets = ['https://fonts.googleapis.com/css?family=Roboto:400,700']
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 server = app.server
 
-# Custom index string for manifest support
 app.index_string = '''
 <!DOCTYPE html>
 <html>
@@ -41,8 +42,6 @@ def load_data():
             parse_dates=["timestamp"],
             date_format="%Y-%m-%d %H:%M:%S"
         )
-        print("Sample timestamps:", df["timestamp"].head())
-
         numeric_cols = [
             col for col in df.columns
             if col not in [
@@ -52,8 +51,7 @@ def load_data():
             ]
         ]
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
-
-        # Forward-fill a few key columns if needed
+        # Forward-fill key columns if needed
         ffilled_cols = [
             "Temperature (BME280) (°C)",
             "Humidity (BME280) (%)",
@@ -61,10 +59,6 @@ def load_data():
             "Light Intensity (BH1750) (lux)"
         ]
         df[ffilled_cols] = df[ffilled_cols].ffill()
-
-        print("Data shape:", df.shape)
-        print("Min/Max timestamps:", df["timestamp"].min(), df["timestamp"].max())
-
         return df
     except Exception as e:
         print(f"Error loading data: {e}")
@@ -80,10 +74,9 @@ def create_line_figure(df, y_cols, title, ytitle):
                     y=df[col],
                     mode="lines",
                     name=col.split("(")[0].strip(),
-                    line=dict(width=1)
+                    line=dict(width=2)  # slightly thicker lines
                 )
             )
-
     fig.update_layout(
         xaxis=dict(
             type="date",
@@ -106,8 +99,9 @@ def create_line_figure(df, y_cols, title, ytitle):
         margin=dict(b=80, t=40, l=60, r=30),
         title=dict(text=title, x=0.05, xanchor="left"),
         height=500,
-        plot_bgcolor="white",
-        dragmode="zoom"
+        plot_bgcolor="whitesmoke",  # neutral background color
+        dragmode="zoom",
+        font=dict(family="Roboto, sans-serif")
     )
     return fig
 
@@ -122,7 +116,6 @@ def create_bar_figure(df, col, title, ytitle):
                 marker_color="royalblue"
             )
         )
-
     fig.update_layout(
         xaxis=dict(
             type="date",
@@ -145,19 +138,18 @@ def create_bar_figure(df, col, title, ytitle):
         margin=dict(b=80, t=40, l=60, r=30),
         title=dict(text=title, x=0.05, xanchor="left"),
         height=500,
-        plot_bgcolor="white",
-        dragmode="zoom"
+        plot_bgcolor="whitesmoke",
+        dragmode="zoom",
+        font=dict(family="Roboto, sans-serif")
     )
     return fig
 
 def create_wind_rose(df):
     if df.empty or "Wind Direction (Wind Vane) (deg)" not in df.columns:
         return go.Figure()
-
     try:
         wind_df = df[["Wind Direction (Wind Vane) (deg)", "Wind Speed (Anemometer) (m/s)"]].copy()
         wind_df["direction"] = wind_df["Wind Direction (Wind Vane) (deg)"] % 360
-
         bins = np.arange(-11.25, 348.76, 22.5)
         labels = [
             "N", "NNE", "NE", "ENE", "E", "ESE",
@@ -170,7 +162,6 @@ def create_wind_rose(df):
             labels=labels,
             include_lowest=True
         )
-
         speed_bins = [0, 1, 2, 3, 4, 5, 6, 20]
         speed_labels = ["0-1", "1-2", "2-3", "3-4", "4-5", "5-6", "6+"]
         wind_df["strength"] = pd.cut(
@@ -178,9 +169,7 @@ def create_wind_rose(df):
             bins=speed_bins,
             labels=speed_labels
         )
-
         wind_df = wind_df.groupby(["direction", "strength"], observed=False).size().reset_index(name="frequency")
-
         fig = px.bar_polar(
             wind_df,
             r="frequency",
@@ -191,7 +180,6 @@ def create_wind_rose(df):
             direction="clockwise",
             start_angle=90
         )
-
         fig.update_layout(
             polar=dict(
                 angularaxis=dict(
@@ -200,7 +188,7 @@ def create_wind_rose(df):
                     gridcolor="#f0f0f0"
                 ),
                 radialaxis=dict(visible=False),
-                bgcolor="white"
+                bgcolor="whitesmoke"
             ),
             title="Wind Rose",
             height=500,
@@ -212,7 +200,8 @@ def create_wind_rose(df):
                 y=1.02,
                 xanchor="center",
                 x=0.5
-            )
+            ),
+            font=dict(family="Roboto, sans-serif")
         )
         return fig
     except Exception as e:
@@ -221,8 +210,6 @@ def create_wind_rose(df):
 
 def create_temperature_figure(df):
     fig = go.Figure()
-
-    # MCP9808 (red)
     col_mcp = "Temperature (MCP9808) (°C)"
     if col_mcp in df.columns:
         fig.add_trace(
@@ -231,11 +218,9 @@ def create_temperature_figure(df):
                 y=df[col_mcp],
                 mode="lines",
                 name="MCP9808",
-                line=dict(width=1, color="red")
+                line=dict(width=2, color="red")
             )
         )
-
-    # BME280 (blue)
     col_bme = "Temperature (BME280) (°C)"
     if col_bme in df.columns:
         fig.add_trace(
@@ -244,10 +229,9 @@ def create_temperature_figure(df):
                 y=df[col_bme],
                 mode="lines",
                 name="BME280",
-                line=dict(width=1, color="blue")
+                line=dict(width=2, color="blue")
             )
         )
-
     fig.update_layout(
         xaxis=dict(
             type="date",
@@ -270,7 +254,7 @@ def create_temperature_figure(df):
         margin=dict(b=80, t=40, l=60, r=30),
         title=dict(text="Temperature", x=0.05, xanchor="left"),
         height=500,
-        plot_bgcolor="white",
+        plot_bgcolor="whitesmoke",
         dragmode="zoom",
         legend=dict(
             orientation="h",
@@ -279,9 +263,9 @@ def create_temperature_figure(df):
             xanchor="center",
             x=0.5,
             traceorder="normal"
-        )
+        ),
+        font=dict(family="Roboto, sans-serif")
     )
-
     return fig
 
 def create_air_quality_figure(df):
@@ -300,10 +284,9 @@ def create_air_quality_figure(df):
                     y=df[col],
                     mode="lines",
                     name=short_name,
-                    line=dict(width=1)
+                    line=dict(width=2)
                 )
             )
-
     fig.update_layout(
         xaxis=dict(
             type="date",
@@ -326,7 +309,7 @@ def create_air_quality_figure(df):
         margin=dict(b=80, t=40, l=60, r=30),
         title=dict(text="Air Quality Monitoring", x=0.05, xanchor="left"),
         height=500,
-        plot_bgcolor="white",
+        plot_bgcolor="whitesmoke",
         dragmode="zoom",
         legend=dict(
             orientation="h",
@@ -335,18 +318,61 @@ def create_air_quality_figure(df):
             xanchor="center",
             x=0.5,
             traceorder="normal"
-        )
+        ),
+        font=dict(family="Roboto, sans-serif")
     )
-
     return fig
 
-# Updated layout with tabs for each plot
+# Updated header with creative title effect using Dash components for a proper line break
+header = html.Div(
+    [
+        # Foreground title (clear and readable)
+        html.Div(
+            [
+                "Experimental Environmental",
+                html.Br(),
+                "Monitoring Station"
+            ],
+            className="title-foreground",
+            style={
+                "position": "relative",
+                "zIndex": "1",
+                "textAlign": "center",
+                "lineHeight": "1.2",
+                "fontSize": "24px",
+                "fontWeight": "bold",
+                "color": "#333"
+            }
+        )
+    ],
+    style={
+        "position": "relative",
+        "padding": "20px",
+        "border": "1px solid #ccc",
+        "borderRadius": "10px",
+        "margin": "0 auto",
+        "maxWidth": "500px",
+        "backgroundColor": "rgba(255, 255, 255, 0.8)",
+        "marginBottom": "30px"
+    }
+)
+
+# Footer to display designer credit
+footer = html.Footer(
+    "Designed by Dimitris Mitropoulos",
+    style={
+        "position": "fixed",
+        "bottom": "10px",
+        "right": "10px",
+        "fontSize": "12px",
+        "color": "#666",
+        "fontFamily": "Roboto, sans-serif"
+    }
+)
+
 app.layout = html.Div(
     [
-        html.H1(
-            "Weather Station Dashboard",
-            style={"textAlign": "center", "marginBottom": "30px"}
-        ),
+        header,  # Your updated header with creative title
         dcc.Interval(id="interval", interval=5000),
         dcc.Tabs(
             id="tabs",
@@ -360,21 +386,28 @@ app.layout = html.Div(
                 dcc.Tab(label="Wind Rose", value="Wind Rose"),
                 dcc.Tab(label="Air Quality Monitoring", value="Air Quality Monitoring"),
                 dcc.Tab(label="Rain Accumulation", value="Rain Accumulation"),
-            ]
+            ],
+            style={"fontFamily": "Roboto, sans-serif", "fontWeight": "bold"},
+            persistence=True,
+            persistence_type="session"
         ),
-        html.Div(id="tabs-content")
+        html.Div(id="tabs-content", style={"transition": "opacity 0.5s ease"}),
+        footer  # Designer credit in the footer
     ],
     style={
         "padding": "40px",
         "maxWidth": "1200px",
         "margin": "0 auto",
         "backgroundColor": "#f8f8f8",
+        "backgroundImage": "url('/assets/background.png')",
+        "backgroundRepeat": "repeat",
+        "backgroundSize": "contain",
         "color": "#333333",
-        "fontFamily": "Arial, sans-serif"
+        "fontFamily": "Roboto, sans-serif"
     }
 )
 
-# Callback to update tab content based on selected tab and interval refresh
+# Callback to update tab content with a loading effect during data refresh
 @app.callback(
     Output("tabs-content", "children"),
     [Input("tabs", "value"),
@@ -382,7 +415,6 @@ app.layout = html.Div(
 )
 def render_content(tab, n_intervals):
     df = load_data()
-    
     if tab == "Temperature":
         fig = create_temperature_figure(df)
     elif tab == "Humidity":
@@ -401,8 +433,11 @@ def render_content(tab, n_intervals):
         fig = create_bar_figure(df, "Rain Accumulation (SEN0575) (mm)", "Rain Accumulation", "mm")
     else:
         fig = go.Figure()
-
-    return dcc.Graph(figure=fig, className="dash-graph")
+    return dcc.Loading(
+        children=dcc.Graph(figure=fig, className="dash-graph"),
+        type="circle",
+        fullscreen=False
+    )
 
 if __name__ == "__main__":
     app.run_server(host="0.0.0.0", port=8050, debug=False)
