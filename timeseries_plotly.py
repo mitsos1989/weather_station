@@ -117,6 +117,7 @@ def create_line_figure(df, y_cols, title, ytitle):
     fig.update_layout(
         xaxis=dict(
             type="date",
+            tickformat="%H:%M",  # Display time in hh:mm format
             showticklabels=True,
             tickfont=tick_font,
             title=dict(text="", font=axis_title_font),
