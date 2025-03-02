@@ -334,6 +334,8 @@ def create_temperature_figure(df):
 
 def create_air_quality_figure(df):
     fig = go.Figure()
+    # Define threshold values for concentration (µg/m³)
+    thresholds = {"PM1.0": 20, "PM2.5": 25, "PM10.0": 50}
     cols = [
         "PM1.0 (PMSA003I) (µg/m³)",
         "PM2.5 (PMSA003I) (µg/m³)",
@@ -341,19 +343,44 @@ def create_air_quality_figure(df):
     ]
     for col in cols:
         if col in df.columns:
-            short_name = col.split("(")[0].strip()
+            short_name = col.split("(")[0].strip()  # e.g., "PM1.0"
+            # If it's PM10.0, use a transparent color; otherwise, use default styling.
+            if short_name == "PM10.0":
+                line_props = dict(width=2, shape='spline', smoothing=0.8, color='rgba(0, 128, 0, 0.5)')
+            else:
+                line_props = dict(width=2, shape='spline', smoothing=0.8)
             fig.add_trace(
-                go.Scattergl(
+                go.Scatter(
                     x=df["timestamp"],
                     y=df[col],
                     mode="lines",
                     name=short_name,
-                    line=dict(width=2)
+                    line=line_props
                 )
+            )
+    # Add dashed horizontal lines for each pollutant threshold
+    for pollutant, thresh in thresholds.items():
+        if any(pollutant in trace.name for trace in fig.data):
+            fig.add_shape(
+                type="line",
+                xref="paper", x0=0, x1=1,
+                yref="y",
+                y0=thresh, y1=thresh,
+                line=dict(dash="dash", width=2, color="black")
+            )
+            fig.add_annotation(
+                xref="paper",
+                x=1.01,
+                y=thresh,
+                yshift=10,  # move the label up to avoid overlapping the line
+                text=f"<b>{pollutant} ({thresh} µg/m³)</b>",
+                showarrow=False,
+                font=axis_title_font
             )
     fig.update_layout(
         xaxis=dict(
             type="date",
+            tickformat="%H:%M",  # Display time in hh:mm format
             showticklabels=True,
             tickfont=tick_font,
             title=dict(text="", font=axis_title_font),
@@ -365,7 +392,7 @@ def create_air_quality_figure(df):
             linecolor="#303030"
         ),
         yaxis=dict(
-            title=dict(text="µg/m³", font=axis_title_font),
+            title=dict(text="Concentration (µg/m³)", font=axis_title_font),
             tickfont=tick_font,
             gridcolor="#f0f0f0",
             showgrid=True,
@@ -373,7 +400,7 @@ def create_air_quality_figure(df):
             linewidth=2,
             linecolor="#303030"
         ),
-        margin=dict(b=80, t=40, l=60, r=30),
+        margin=dict(b=80, t=40, l=60, r=100),
         title=dict(text="Air Quality Monitoring", x=0.05, xanchor="left", font=title_font),
         width=900,
         height=500,
@@ -468,7 +495,8 @@ app.layout = html.Div(
                 dcc.Tab(label="Cloud Camera", value="Cloud Camera", style=tab_style, selected_style=tab_selected_style)
             ],
             persistence=True,
-            persistence_type="session"
+            persistence_type="session",
+            style={"display": "grid", "gridTemplateColumns": "repeat(2, 1fr)"}  # two-column layout for tabs
         ),
         html.Div(id="tabs-content", style={"transition": "opacity 0.5s ease"}),
         footer
@@ -485,6 +513,7 @@ app.layout = html.Div(
         "fontFamily": "Roboto, sans-serif"
     }
 )
+
 
 # Callback to update tab content with a loading effect during data refresh
 @app.callback(
