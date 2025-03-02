@@ -7,6 +7,7 @@ import plotly.express as px
 from datetime import datetime, timedelta
 
 app = dash.Dash(__name__)
+server = app.server
 
 app.index_string = '''
 <!DOCTYPE html>
@@ -30,7 +31,7 @@ app.index_string = '''
 </html>
 '''
 
-CSV_PATH = "/home/dimitris/weather_station/weather_station_data.csv"
+CSV_PATH = "weather_station_data.csv"
 
 def load_data():
     try:
