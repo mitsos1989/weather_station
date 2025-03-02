@@ -5,7 +5,8 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo  # Python 3.9+ is required
+from zoneinfo import ZoneInfo  # requires Python 3.9+
+import os, glob, base64
 
 # Include Roboto font from Google Fonts
 external_stylesheets = ['https://fonts.googleapis.com/css?family=Roboto:400,700']
@@ -44,17 +45,17 @@ def load_data():
             parse_dates=["timestamp"],
             date_format="%Y-%m-%d %H:%M:%S"
         )
-        # Localize the naive timestamps to UTC (since data are in UTC)
+        # Localize the naive timestamps to UTC
         df["timestamp"] = df["timestamp"].dt.tz_localize("UTC")
         
-        # Get current time in Greece (Europe/Athens timezone)
+        # Get current time in Greece (Europe/Athens)
         now_greece = datetime.now(ZoneInfo("Europe/Athens"))
-        # Determine the threshold: last 24 hours in Greek local time
+        # Determine threshold: last 24 hours (Greek local time)
         threshold = now_greece - timedelta(hours=24)
         # Convert threshold to UTC for comparison
         threshold_utc = threshold.astimezone(ZoneInfo("UTC"))
         
-        # Filter data to include only the last 24 hours (UTC timestamps)
+        # Filter data to include only the last 24 hours
         df = df[df["timestamp"] >= threshold_utc]
         
         numeric_cols = [
@@ -67,7 +68,7 @@ def load_data():
         ]
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
         
-        # Forward-fill a few key columns if needed
+        # Forward-fill key columns if needed
         ffilled_cols = [
             "Temperature (BME280) (°C)",
             "Humidity (BME280) (%)",
@@ -75,11 +76,21 @@ def load_data():
             "Light Intensity (BH1750) (lux)"
         ]
         df[ffilled_cols] = df[ffilled_cols].ffill()
-        
         return df
     except Exception as e:
         print(f"Error loading data: {e}")
         return pd.DataFrame()
+
+def get_latest_cloud_camera_image():
+    # List all jpg files in the whole_sky_camera folder
+    files = glob.glob("whole_sky_camera/*.jpg")
+    if not files:
+        return None
+    # Choose the file with the latest creation time
+    latest_file = max(files, key=os.path.getctime)
+    with open(latest_file, "rb") as f:
+        encoded = base64.b64encode(f.read()).decode("utf-8")
+    return "data:image/jpeg;base64," + encoded
 
 # Common font settings for figures
 common_font = dict(family="Roboto, sans-serif")
@@ -87,6 +98,8 @@ title_font = dict(size=20, family="Roboto, sans-serif")
 axis_title_font = dict(size=16, family="Roboto, sans-serif")
 tick_font = dict(size=14, family="Roboto, sans-serif")
 legend_font = dict(size=16, family="Roboto, sans-serif")
+
+# Update each plotting function to include a landscape width (900px)
 
 def create_line_figure(df, y_cols, title, ytitle):
     fig = go.Figure()
@@ -125,6 +138,7 @@ def create_line_figure(df, y_cols, title, ytitle):
         ),
         margin=dict(b=80, t=40, l=60, r=30),
         title=dict(text=title, x=0.05, xanchor="left", font=title_font),
+        width=900,
         height=500,
         plot_bgcolor="whitesmoke",
         dragmode="zoom",
@@ -175,6 +189,7 @@ def create_bar_figure(df, col, title, ytitle):
         ),
         margin=dict(b=80, t=40, l=60, r=30),
         title=dict(text=title, x=0.05, xanchor="left", font=title_font),
+        width=900,
         height=500,
         plot_bgcolor="whitesmoke",
         dragmode="zoom",
@@ -234,6 +249,7 @@ def create_wind_rose(df):
                 bgcolor="whitesmoke"
             ),
             title=dict(text="Wind Rose", font=title_font),
+            width=900,
             height=500,
             margin=dict(t=80, b=80, l=80, r=80),
             font=common_font,
@@ -299,6 +315,7 @@ def create_temperature_figure(df):
         ),
         margin=dict(b=80, t=40, l=60, r=30),
         title=dict(text="Temperature", x=0.05, xanchor="left", font=title_font),
+        width=900,
         height=500,
         plot_bgcolor="whitesmoke",
         dragmode="zoom",
@@ -357,6 +374,7 @@ def create_air_quality_figure(df):
         ),
         margin=dict(b=80, t=40, l=60, r=30),
         title=dict(text="Air Quality Monitoring", x=0.05, xanchor="left", font=title_font),
+        width=900,
         height=500,
         plot_bgcolor="whitesmoke",
         dragmode="zoom",
@@ -372,8 +390,7 @@ def create_air_quality_figure(df):
     )
     return fig
 
-
-# Updated header: only foreground title remains.
+# Updated header: only the clear foreground title remains.
 header = html.Div(
     html.Div(
         [
@@ -383,8 +400,6 @@ header = html.Div(
         ],
         className="title-foreground",
         style={
-            "position": "relative",
-            "zIndex": "1",
             "textAlign": "center",
             "lineHeight": "1.2",
             "fontSize": "24px",
@@ -432,7 +447,7 @@ tab_selected_style = {
     "borderBottom": "2px solid #333"
 }
 
-# Updated layout with header, tabs, and footer
+# Updated layout with the new "Cloud Camera" tab included.
 app.layout = html.Div(
     [
         header,
@@ -449,6 +464,7 @@ app.layout = html.Div(
                 dcc.Tab(label="Wind Rose", value="Wind Rose", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="Air Quality Monitoring", value="Air Quality Monitoring", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="Rain Accumulation", value="Rain Accumulation", style=tab_style, selected_style=tab_selected_style),
+                dcc.Tab(label="Cloud Camera", value="Cloud Camera", style=tab_style, selected_style=tab_selected_style)
             ],
             persistence=True,
             persistence_type="session"
@@ -479,24 +495,42 @@ def render_content(tab, n_intervals):
     df = load_data()
     if tab == "Temperature":
         fig = create_temperature_figure(df)
+        content = dcc.Graph(figure=fig, className="dash-graph")
     elif tab == "Humidity":
         fig = create_line_figure(df, ["Humidity (BME280) (%)"], "Humidity", "%")
+        content = dcc.Graph(figure=fig, className="dash-graph")
     elif tab == "Atmospheric Pressure":
         fig = create_line_figure(df, ["Pressure (BME280) (hPa)"], "Atmospheric Pressure", "hPa")
+        content = dcc.Graph(figure=fig, className="dash-graph")
     elif tab == "Light Intensity":
         fig = create_line_figure(df, ["Light Intensity (BH1750) (lux)"], "Light Intensity", "lux")
+        content = dcc.Graph(figure=fig, className="dash-graph")
     elif tab == "UV Index":
         fig = create_line_figure(df, ["UV Index (GY-8511)"], "UV Index", "")
+        content = dcc.Graph(figure=fig, className="dash-graph")
     elif tab == "Wind Rose":
         fig = create_wind_rose(df)
+        content = dcc.Graph(figure=fig, className="dash-graph")
     elif tab == "Air Quality Monitoring":
         fig = create_air_quality_figure(df)
+        content = dcc.Graph(figure=fig, className="dash-graph")
     elif tab == "Rain Accumulation":
         fig = create_bar_figure(df, "Rain Accumulation (SEN0575) (mm)", "Rain Accumulation", "mm")
+        content = dcc.Graph(figure=fig, className="dash-graph")
+    elif tab == "Cloud Camera":
+        img_src = get_latest_cloud_camera_image()
+        if img_src is None:
+            content = html.Div("No image found in whole_sky_camera folder.", style={"textAlign": "center", "padding": "20px"})
+        else:
+            content = html.Div(
+                html.Img(src=img_src, style={"maxWidth": "100%", "height": "auto"}),
+                style={"textAlign": "center", "padding": "20px"}
+            )
     else:
-        fig = go.Figure()
+        content = html.Div("No content available.", style={"textAlign": "center"})
+    
     return dcc.Loading(
-        children=dcc.Graph(figure=fig, className="dash-graph"),
+        children=content,
         type="circle",
         fullscreen=False
     )
