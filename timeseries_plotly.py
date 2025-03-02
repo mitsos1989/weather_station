@@ -5,7 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo  # requires Python 3.9+
+from zoneinfo import ZoneInfo  # Python 3.9+
 import os, glob, base64
 
 # Include Roboto font from Google Fonts
@@ -23,6 +23,12 @@ app.index_string = '''
         <!-- Link to the manifest file -->
         <link rel="manifest" href="/assets/manifest.json">
         {%css%}
+        <style>
+          /* Keyframes for blinking effect */
+          @keyframes blinker {
+              50% { opacity: 0; }
+          }
+        </style>
     </head>
     <body>
         {%app_entry%}
@@ -45,30 +51,22 @@ def load_data():
             parse_dates=["timestamp"],
             date_format="%Y-%m-%d %H:%M:%S"
         )
-        # Localize the naive timestamps to UTC
+        # Localize the naive timestamps to UTC (data are in UTC)
         df["timestamp"] = df["timestamp"].dt.tz_localize("UTC")
         
         # Get current time in Greece (Europe/Athens)
         now_greece = datetime.now(ZoneInfo("Europe/Athens"))
-        # Determine threshold: last 24 hours (Greek local time)
         threshold = now_greece - timedelta(hours=24)
-        # Convert threshold to UTC for comparison
         threshold_utc = threshold.astimezone(ZoneInfo("UTC"))
-        
-        # Filter data to include only the last 24 hours
+        # Filter for the last 24 hours
         df = df[df["timestamp"] >= threshold_utc]
         
         numeric_cols = [
             col for col in df.columns
-            if col not in [
-                "timestamp",
-                "Lightning Detection (AS3935)",
-                "Rain Event (LM393)"
-            ]
+            if col not in ["timestamp", "Lightning Detection (AS3935)", "Rain Event (LM393)"]
         ]
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
         
-        # Forward-fill key columns if needed
         ffilled_cols = [
             "Temperature (BME280) (°C)",
             "Humidity (BME280) (%)",
@@ -82,11 +80,9 @@ def load_data():
         return pd.DataFrame()
 
 def get_latest_cloud_camera_image():
-    # List all jpg files in the whole_sky_camera folder
     files = glob.glob("whole_sky_camera/*.jpg")
     if not files:
         return None
-    # Choose the file with the latest creation time
     latest_file = max(files, key=os.path.getctime)
     with open(latest_file, "rb") as f:
         encoded = base64.b64encode(f.read()).decode("utf-8")
@@ -334,7 +330,7 @@ def create_temperature_figure(df):
 
 def create_air_quality_figure(df):
     fig = go.Figure()
-    # Define threshold values for concentration (µg/m³)
+    # Define threshold values (µg/m³)
     thresholds = {"PM1.0": 20, "PM2.5": 25, "PM10.0": 50}
     cols = [
         "PM1.0 (PMSA003I) (µg/m³)",
@@ -344,7 +340,7 @@ def create_air_quality_figure(df):
     for col in cols:
         if col in df.columns:
             short_name = col.split("(")[0].strip()  # e.g., "PM1.0"
-            # If it's PM10.0, use a transparent color; otherwise, use default styling.
+            # For PM10.0, use the specified transparent green color
             if short_name == "PM10.0":
                 line_props = dict(width=2, shape='spline', smoothing=0.8, color='rgba(0, 128, 0, 0.5)')
             else:
@@ -358,7 +354,7 @@ def create_air_quality_figure(df):
                     line=line_props
                 )
             )
-    # Add dashed horizontal lines for each pollutant threshold
+    # Add threshold lines and labels
     for pollutant, thresh in thresholds.items():
         if any(pollutant in trace.name for trace in fig.data):
             fig.add_shape(
@@ -372,7 +368,7 @@ def create_air_quality_figure(df):
                 xref="paper",
                 x=1.01,
                 y=thresh,
-                yshift=10,  # move the label up to avoid overlapping the line
+                yshift=10,  # move label up a bit
                 text=f"<b>{pollutant} ({thresh} µg/m³)</b>",
                 showarrow=False,
                 font=axis_title_font
@@ -380,7 +376,7 @@ def create_air_quality_figure(df):
     fig.update_layout(
         xaxis=dict(
             type="date",
-            tickformat="%H:%M",  # Display time in hh:mm format
+            tickformat="%H:%M",
             showticklabels=True,
             tickfont=tick_font,
             title=dict(text="", font=axis_title_font),
@@ -475,10 +471,14 @@ tab_selected_style = {
     "borderBottom": "2px solid #333"
 }
 
+# Station status indicator placeholder (we'll update its content via a callback)
+station_status = html.Div(id="station-status", style={"textAlign": "center", "marginBottom": "20px"})
+
 # Updated layout with the new "Cloud Camera" tab included.
 app.layout = html.Div(
     [
         header,
+        station_status,  # Displays last read timestamp and online/offline status
         dcc.Interval(id="interval", interval=5000),
         dcc.Tabs(
             id="tabs",
@@ -496,7 +496,7 @@ app.layout = html.Div(
             ],
             persistence=True,
             persistence_type="session",
-            style={"display": "grid", "gridTemplateColumns": "repeat(2, 1fr)"}  # two-column layout for tabs
+            style={"display": "grid", "gridTemplateColumns": "repeat(2, 1fr)"}
         ),
         html.Div(id="tabs-content", style={"transition": "opacity 0.5s ease"}),
         footer
@@ -563,6 +563,52 @@ def render_content(tab, n_intervals):
         children=content,
         type="circle",
         fullscreen=False
+    )
+
+# New callback to update station status and last data timestamp
+@app.callback(
+    Output("station-status", "children"),
+    [Input("interval", "n_intervals")]
+)
+def update_station_status(n_intervals):
+    df = load_data()
+    if df.empty or df["timestamp"].max() is None:
+        return html.Div("No data available", style={"color": "gray"})
+    last_ts = df["timestamp"].max()  # Timestamp in UTC
+    last_ts_greece = last_ts.astimezone(ZoneInfo("Europe/Athens"))
+    now_greece = datetime.now(ZoneInfo("Europe/Athens"))
+    diff_minutes = (now_greece - last_ts_greece).total_seconds() / 60.0
+    if diff_minutes > 30:
+        status_text = "Station is OFFLINE"
+        indicator = html.Span(
+            "",
+            style={
+                "display": "inline-block",
+                "width": "15px",
+                "height": "15px",
+                "borderRadius": "50%",
+                "backgroundColor": "red",
+                "marginRight": "10px",
+                "animation": "blinker 1s linear infinite"
+            }
+        )
+    else:
+        status_text = "Station is Online"
+        indicator = html.Span(
+            "",
+            style={
+                "display": "inline-block",
+                "width": "15px",
+                "height": "15px",
+                "borderRadius": "50%",
+                "backgroundColor": "green",
+                "marginRight": "10px"
+            }
+        )
+    ts_str = last_ts_greece.strftime("%Y-%m-%d %H:%M:%S")
+    return html.Div(
+        [indicator, html.Span(f"{status_text} (Last data at: {ts_str})")],
+        style={"fontSize": "16px", "fontFamily": "Roboto, sans-serif"}
     )
 
 if __name__ == "__main__":
