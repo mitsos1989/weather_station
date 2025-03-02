@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 app = dash.Dash(__name__)
 server = app.server
 
+# Custom index string for manifest support
 app.index_string = '''
 <!DOCTYPE html>
 <html>
@@ -89,7 +90,7 @@ def create_line_figure(df, y_cols, title, ytitle):
             showticklabels=False,
             showgrid=True,
             gridcolor="#f0f0f0",
-            rangeslider=dict(visible=False),  # No range slider
+            rangeslider=dict(visible=False),
             showline=True,
             linewidth=2,
             linecolor="#303030",
@@ -339,6 +340,7 @@ def create_air_quality_figure(df):
 
     return fig
 
+# Updated layout with tabs for each plot
 app.layout = html.Div(
     [
         html.H1(
@@ -346,121 +348,61 @@ app.layout = html.Div(
             style={"textAlign": "center", "marginBottom": "30px"}
         ),
         dcc.Interval(id="interval", interval=5000),
-
-        # Row 1: Temperature & Humidity
-        html.Div([
-            dcc.Graph(
-                id="temperature",
-                figure=create_temperature_figure(load_data())
-            ),
-            dcc.Graph(
-                id="humidity",
-                figure=create_line_figure(
-                    load_data(),
-                    ["Humidity (BME280) (%)"],
-                    "Humidity",
-                    "%"
-                )
-            ),
-        ], style={"display": "flex", "gap": "20px", "marginBottom": "20px"}),
-
-        # Row 2: Pressure & Light
-        html.Div([
-            dcc.Graph(
-                id="pressure",
-                figure=create_line_figure(
-                    load_data(),
-                    ["Pressure (BME280) (hPa)"],
-                    "Atmospheric Pressure",
-                    "hPa"
-                )
-            ),
-            dcc.Graph(
-                id="light",
-                figure=create_line_figure(
-                    load_data(),
-                    ["Light Intensity (BH1750) (lux)"],
-                    "Light Intensity",
-                    "lux"
-                )
-            ),
-        ], style={"display": "flex", "gap": "20px", "marginBottom": "20px"}),
-
-        # Row 3: Wind Rose
-        html.Div([
-            dcc.Graph(
-                id="wind-rose",
-                figure=create_wind_rose(load_data())
-            ),
-        ], style={"marginBottom": "20px"}),
-
-        # Row 4: Air Quality
-        html.Div([
-            dcc.Graph(
-                id="air-quality",
-                figure=create_air_quality_figure(load_data())
-            ),
-        ], style={"marginBottom": "20px"}),
-
-        # Row 5: Rain Intensity (bar) & UV Index
-        html.Div([
-            dcc.Graph(
-                id="rain-intensity",
-                figure=create_bar_figure(
-                    load_data(),
-                    "Rain Accumulation (SEN0575) (mm)",
-                    "Daily Rain Accumulation",
-                    "mm"
-                )
-            ),
-            dcc.Graph(
-                id="uv-index",
-                figure=create_line_figure(
-                    load_data(),
-                    ["UV Index (GY-8511)"],
-                    "UV Index",
-                    ""
-                )
-            ),
-        ], style={"display": "flex", "gap": "20px", "marginBottom": "20px"}),
+        dcc.Tabs(
+            id="tabs",
+            value="Temperature",
+            children=[
+                dcc.Tab(label="Temperature", value="Temperature"),
+                dcc.Tab(label="Humidity", value="Humidity"),
+                dcc.Tab(label="Atmospheric Pressure", value="Atmospheric Pressure"),
+                dcc.Tab(label="Light Intensity", value="Light Intensity"),
+                dcc.Tab(label="UV Index", value="UV Index"),
+                dcc.Tab(label="Wind Rose", value="Wind Rose"),
+                dcc.Tab(label="Air Quality Monitoring", value="Air Quality Monitoring"),
+                dcc.Tab(label="Rain Accumulation", value="Rain Accumulation"),
+            ]
+        ),
+        html.Div(id="tabs-content")
     ],
-    # Here's the style for the entire page container:
     style={
         "padding": "40px",
         "maxWidth": "1200px",
         "margin": "0 auto",
-        "backgroundColor": "#f8f8f8",      # Light gray background
-        "color": "#333333",               # Dark grey text
-        "fontFamily": "Arial, sans-serif" # Font family
+        "backgroundColor": "#f8f8f8",
+        "color": "#333333",
+        "fontFamily": "Arial, sans-serif"
     }
 )
 
+# Callback to update tab content based on selected tab and interval refresh
 @app.callback(
-    [
-        Output("temperature", "figure"),
-        Output("humidity", "figure"),
-        Output("pressure", "figure"),
-        Output("light", "figure"),
-        Output("wind-rose", "figure"),
-        Output("air-quality", "figure"),
-        Output("rain-intensity", "figure"),
-        Output("uv-index", "figure")
-    ],
-    [Input("interval", "n_intervals")]
+    Output("tabs-content", "children"),
+    [Input("tabs", "value"),
+     Input("interval", "n_intervals")]
 )
-def update_all_graphs(n):
+def render_content(tab, n_intervals):
     df = load_data()
+    
+    if tab == "Temperature":
+        fig = create_temperature_figure(df)
+    elif tab == "Humidity":
+        fig = create_line_figure(df, ["Humidity (BME280) (%)"], "Humidity", "%")
+    elif tab == "Atmospheric Pressure":
+        fig = create_line_figure(df, ["Pressure (BME280) (hPa)"], "Atmospheric Pressure", "hPa")
+    elif tab == "Light Intensity":
+        fig = create_line_figure(df, ["Light Intensity (BH1750) (lux)"], "Light Intensity", "lux")
+    elif tab == "UV Index":
+        fig = create_line_figure(df, ["UV Index (GY-8511)"], "UV Index", "")
+    elif tab == "Wind Rose":
+        fig = create_wind_rose(df)
+    elif tab == "Air Quality Monitoring":
+        fig = create_air_quality_figure(df)
+    elif tab == "Rain Accumulation":
+        fig = create_bar_figure(df, "Rain Accumulation (SEN0575) (mm)", "Rain Accumulation", "mm")
+    else:
+        fig = go.Figure()
 
-    return (
-        create_temperature_figure(df),
-        create_line_figure(df, ["Humidity (BME280) (%)"], "Humidity", "%"),
-        create_line_figure(df, ["Pressure (BME280) (hPa)"], "Atmospheric Pressure", "hPa"),
-        create_line_figure(df, ["Light Intensity (BH1750) (lux)"], "Light Intensity", "lux"),
-        create_wind_rose(df),
-        create_air_quality_figure(df),
-        create_bar_figure(df, "Rain Accumulation (SEN0575) (mm)", "Rain Accumulation", "mm"),
-        create_line_figure(df, ["UV Index (GY-8511)"], "UV Index", "")
-    )
+    return dcc.Graph(figure=fig, className="dash-graph")
 
 if __name__ == "__main__":
     app.run_server(host="0.0.0.0", port=8050, debug=False)
