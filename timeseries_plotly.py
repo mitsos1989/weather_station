@@ -5,6 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo  # Python 3.9+ is required
 
 # Include Roboto font from Google Fonts
 external_stylesheets = ['https://fonts.googleapis.com/css?family=Roboto:400,700']
@@ -37,11 +38,25 @@ CSV_PATH = "weather_station_data.csv"
 
 def load_data():
     try:
+        # Read CSV and parse timestamps
         df = pd.read_csv(
             CSV_PATH,
             parse_dates=["timestamp"],
             date_format="%Y-%m-%d %H:%M:%S"
         )
+        # Localize the naive timestamps to UTC (since data are in UTC)
+        df["timestamp"] = df["timestamp"].dt.tz_localize("UTC")
+        
+        # Get current time in Greece (Europe/Athens timezone)
+        now_greece = datetime.now(ZoneInfo("Europe/Athens"))
+        # Determine the threshold: last 24 hours in Greek local time
+        threshold = now_greece - timedelta(hours=24)
+        # Convert threshold to UTC for comparison
+        threshold_utc = threshold.astimezone(ZoneInfo("UTC"))
+        
+        # Filter data to include only the last 24 hours (UTC timestamps)
+        df = df[df["timestamp"] >= threshold_utc]
+        
         numeric_cols = [
             col for col in df.columns
             if col not in [
@@ -51,6 +66,8 @@ def load_data():
             ]
         ]
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
+        
+        # Forward-fill a few key columns if needed
         ffilled_cols = [
             "Temperature (BME280) (°C)",
             "Humidity (BME280) (%)",
@@ -58,6 +75,7 @@ def load_data():
             "Light Intensity (BH1750) (lux)"
         ]
         df[ffilled_cols] = df[ffilled_cols].ffill()
+        
         return df
     except Exception as e:
         print(f"Error loading data: {e}")
@@ -80,7 +98,7 @@ def create_line_figure(df, y_cols, title, ytitle):
                     y=df[col],
                     mode="lines",
                     name=col.split("(")[0].strip(),
-                    line=dict(width=2)  # slightly thicker lines
+                    line=dict(width=2)
                 )
             )
     fig.update_layout(
@@ -94,7 +112,7 @@ def create_line_figure(df, y_cols, title, ytitle):
             rangeslider=dict(visible=False),
             showline=True,
             linewidth=2,
-            linecolor="#303030",
+            linecolor="#303030"
         ),
         yaxis=dict(
             title=dict(text=ytitle, font=axis_title_font),
@@ -103,7 +121,7 @@ def create_line_figure(df, y_cols, title, ytitle):
             showgrid=True,
             showline=True,
             linewidth=2,
-            linecolor="#303030",
+            linecolor="#303030"
         ),
         margin=dict(b=80, t=40, l=60, r=30),
         title=dict(text=title, x=0.05, xanchor="left", font=title_font),
@@ -111,7 +129,14 @@ def create_line_figure(df, y_cols, title, ytitle):
         plot_bgcolor="whitesmoke",
         dragmode="zoom",
         font=common_font,
-        legend=dict(font=legend_font)
+        legend=dict(
+            orientation="h",
+            font=legend_font,
+            x=0.5,
+            xanchor="center",
+            y=-0.2,
+            yanchor="top"
+        )
     )
     return fig
 
@@ -137,7 +162,7 @@ def create_bar_figure(df, col, title, ytitle):
             rangeslider=dict(visible=False),
             showline=True,
             linewidth=2,
-            linecolor="#303030",
+            linecolor="#303030"
         ),
         yaxis=dict(
             title=dict(text=ytitle, font=axis_title_font),
@@ -146,7 +171,7 @@ def create_bar_figure(df, col, title, ytitle):
             showgrid=True,
             showline=True,
             linewidth=2,
-            linecolor="#303030",
+            linecolor="#303030"
         ),
         margin=dict(b=80, t=40, l=60, r=30),
         title=dict(text=title, x=0.05, xanchor="left", font=title_font),
@@ -154,7 +179,14 @@ def create_bar_figure(df, col, title, ytitle):
         plot_bgcolor="whitesmoke",
         dragmode="zoom",
         font=common_font,
-        legend=dict(font=legend_font)
+        legend=dict(
+            orientation="h",
+            font=legend_font,
+            x=0.5,
+            xanchor="center",
+            y=-0.2,
+            yanchor="top"
+        )
     )
     return fig
 
@@ -165,11 +197,7 @@ def create_wind_rose(df):
         wind_df = df[["Wind Direction (Wind Vane) (deg)", "Wind Speed (Anemometer) (m/s)"]].copy()
         wind_df["direction"] = wind_df["Wind Direction (Wind Vane) (deg)"] % 360
         bins = np.arange(-11.25, 348.76, 22.5)
-        labels = [
-            "N", "NNE", "NE", "ENE", "E", "ESE",
-            "SE", "SSE", "S", "SSW", "SW", "WSW",
-            "W", "WNW", "NW", "NNW"
-        ]
+        labels = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
         wind_df["direction"] = pd.cut(
             wind_df["direction"],
             bins=bins,
@@ -208,8 +236,15 @@ def create_wind_rose(df):
             title=dict(text="Wind Rose", font=title_font),
             height=500,
             margin=dict(t=80, b=80, l=80, r=80),
-            legend=dict(font=legend_font),
-            font=common_font
+            font=common_font,
+            legend=dict(
+                orientation="h",
+                font=legend_font,
+                x=0.5,
+                xanchor="center",
+                y=-0.2,
+                yanchor="top"
+            )
         )
         return fig
     except Exception as e:
@@ -251,7 +286,7 @@ def create_temperature_figure(df):
             rangeslider=dict(visible=False),
             showline=True,
             linewidth=2,
-            linecolor="#303030",
+            linecolor="#303030"
         ),
         yaxis=dict(
             title=dict(text="°C", font=axis_title_font),
@@ -260,15 +295,22 @@ def create_temperature_figure(df):
             showgrid=True,
             showline=True,
             linewidth=2,
-            linecolor="#303030",
+            linecolor="#303030"
         ),
         margin=dict(b=80, t=40, l=60, r=30),
         title=dict(text="Temperature", x=0.05, xanchor="left", font=title_font),
         height=500,
         plot_bgcolor="whitesmoke",
         dragmode="zoom",
-        legend=dict(font=legend_font),
-        font=common_font
+        font=common_font,
+        legend=dict(
+            orientation="h",
+            font=legend_font,
+            x=0.5,
+            xanchor="center",
+            y=-0.2,
+            yanchor="top"
+        )
     )
     return fig
 
@@ -277,7 +319,7 @@ def create_air_quality_figure(df):
     cols = [
         "PM1.0 (PMSA003I) (µg/m³)",
         "PM2.5 (PMSA003I) (µg/m³)",
-        "PM10.0 (PMSA003I) (µg/m³)",
+        "PM10.0 (PMSA003I) (µg/m³)"
     ]
     for col in cols:
         if col in df.columns:
@@ -302,7 +344,7 @@ def create_air_quality_figure(df):
             rangeslider=dict(visible=False),
             showline=True,
             linewidth=2,
-            linecolor="#303030",
+            linecolor="#303030"
         ),
         yaxis=dict(
             title=dict(text="µg/m³", font=axis_title_font),
@@ -311,62 +353,46 @@ def create_air_quality_figure(df):
             showgrid=True,
             showline=True,
             linewidth=2,
-            linecolor="#303030",
+            linecolor="#303030"
         ),
         margin=dict(b=80, t=40, l=60, r=30),
         title=dict(text="Air Quality Monitoring", x=0.05, xanchor="left", font=title_font),
         height=500,
         plot_bgcolor="whitesmoke",
         dragmode="zoom",
-        legend=dict(font=legend_font),
-        font=common_font
+        font=common_font,
+        legend=dict(
+            orientation="h",
+            font=legend_font,
+            x=0.5,
+            xanchor="center",
+            y=-0.2,
+            yanchor="top"
+        )
     )
     return fig
 
-# Updated header with creative title effect using Dash components for a proper line break
+
+# Updated header: only foreground title remains.
 header = html.Div(
-    [
-        html.Div(
-            [
-                "Experimental Environmental",
-                html.Br(),
-                "Monitoring Station"
-            ],
-            className="title-background",
-            style={
-                "position": "absolute",
-                "top": 0,
-                "left": 0,
-                "right": 0,
-                "bottom": 0,
-                "fontSize": "60px",
-                "color": "#999",
-                "filter": "blur(4px)",
-                "opacity": "0.3",
-                "textAlign": "center",
-                "lineHeight": "1.2"
-            }
-        ),
-        html.Div(
-            [
-                "Experimental Environmental",
-                html.Br(),
-                "Monitoring Station"
-            ],
-            className="title-foreground",
-            style={
-                "position": "relative",
-                "zIndex": "1",
-                "textAlign": "center",
-                "lineHeight": "1.2",
-                "fontSize": "24px",
-                "fontWeight": "bold",
-                "color": "#333"
-            }
-        )
-    ],
+    html.Div(
+        [
+            "Experimental Environmental",
+            html.Br(),
+            "Monitoring Station"
+        ],
+        className="title-foreground",
+        style={
+            "position": "relative",
+            "zIndex": "1",
+            "textAlign": "center",
+            "lineHeight": "1.2",
+            "fontSize": "24px",
+            "fontWeight": "bold",
+            "color": "#333"
+        }
+    ),
     style={
-        "position": "relative",
         "padding": "20px",
         "border": "1px solid #ccc",
         "borderRadius": "10px",
@@ -390,7 +416,7 @@ footer = html.Footer(
     }
 )
 
-# Define smaller tab styling for both default and selected states
+# Define smaller tab styling
 tab_style = {
     "padding": "5px 10px",
     "fontSize": "12px",
@@ -406,7 +432,7 @@ tab_selected_style = {
     "borderBottom": "2px solid #333"
 }
 
-# Updated layout with tabs and smooth transitions
+# Updated layout with header, tabs, and footer
 app.layout = html.Div(
     [
         header,
