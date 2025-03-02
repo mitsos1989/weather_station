@@ -51,7 +51,6 @@ def load_data():
             ]
         ]
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
-        # Forward-fill key columns if needed
         ffilled_cols = [
             "Temperature (BME280) (°C)",
             "Humidity (BME280) (%)",
@@ -63,6 +62,13 @@ def load_data():
     except Exception as e:
         print(f"Error loading data: {e}")
         return pd.DataFrame()
+
+# Common font settings for figures
+common_font = dict(family="Roboto, sans-serif")
+title_font = dict(size=20, family="Roboto, sans-serif")
+axis_title_font = dict(size=16, family="Roboto, sans-serif")
+tick_font = dict(size=14, family="Roboto, sans-serif")
+legend_font = dict(size=16, family="Roboto, sans-serif")
 
 def create_line_figure(df, y_cols, title, ytitle):
     fig = go.Figure()
@@ -80,7 +86,9 @@ def create_line_figure(df, y_cols, title, ytitle):
     fig.update_layout(
         xaxis=dict(
             type="date",
-            showticklabels=False,
+            showticklabels=True,
+            tickfont=tick_font,
+            title=dict(text="", font=axis_title_font),
             showgrid=True,
             gridcolor="#f0f0f0",
             rangeslider=dict(visible=False),
@@ -89,7 +97,8 @@ def create_line_figure(df, y_cols, title, ytitle):
             linecolor="#303030",
         ),
         yaxis=dict(
-            title=ytitle,
+            title=dict(text=ytitle, font=axis_title_font),
+            tickfont=tick_font,
             gridcolor="#f0f0f0",
             showgrid=True,
             showline=True,
@@ -97,11 +106,12 @@ def create_line_figure(df, y_cols, title, ytitle):
             linecolor="#303030",
         ),
         margin=dict(b=80, t=40, l=60, r=30),
-        title=dict(text=title, x=0.05, xanchor="left"),
+        title=dict(text=title, x=0.05, xanchor="left", font=title_font),
         height=500,
-        plot_bgcolor="whitesmoke",  # neutral background color
+        plot_bgcolor="whitesmoke",
         dragmode="zoom",
-        font=dict(family="Roboto, sans-serif")
+        font=common_font,
+        legend=dict(font=legend_font)
     )
     return fig
 
@@ -119,7 +129,9 @@ def create_bar_figure(df, col, title, ytitle):
     fig.update_layout(
         xaxis=dict(
             type="date",
-            showticklabels=False,
+            showticklabels=True,
+            tickfont=tick_font,
+            title=dict(text="", font=axis_title_font),
             showgrid=True,
             gridcolor="#f0f0f0",
             rangeslider=dict(visible=False),
@@ -128,7 +140,8 @@ def create_bar_figure(df, col, title, ytitle):
             linecolor="#303030",
         ),
         yaxis=dict(
-            title=ytitle,
+            title=dict(text=ytitle, font=axis_title_font),
+            tickfont=tick_font,
             gridcolor="#f0f0f0",
             showgrid=True,
             showline=True,
@@ -136,11 +149,12 @@ def create_bar_figure(df, col, title, ytitle):
             linecolor="#303030",
         ),
         margin=dict(b=80, t=40, l=60, r=30),
-        title=dict(text=title, x=0.05, xanchor="left"),
+        title=dict(text=title, x=0.05, xanchor="left", font=title_font),
         height=500,
         plot_bgcolor="whitesmoke",
         dragmode="zoom",
-        font=dict(family="Roboto, sans-serif")
+        font=common_font,
+        legend=dict(font=legend_font)
     )
     return fig
 
@@ -185,23 +199,17 @@ def create_wind_rose(df):
                 angularaxis=dict(
                     tickvals=np.arange(0, 360, 22.5),
                     ticktext=labels,
+                    tickfont=tick_font,
                     gridcolor="#f0f0f0"
                 ),
                 radialaxis=dict(visible=False),
                 bgcolor="whitesmoke"
             ),
-            title="Wind Rose",
+            title=dict(text="Wind Rose", font=title_font),
             height=500,
             margin=dict(t=80, b=80, l=80, r=80),
-            legend=dict(
-                title="Wind Speed (m/s)",
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="center",
-                x=0.5
-            ),
-            font=dict(family="Roboto, sans-serif")
+            legend=dict(font=legend_font),
+            font=common_font
         )
         return fig
     except Exception as e:
@@ -235,7 +243,9 @@ def create_temperature_figure(df):
     fig.update_layout(
         xaxis=dict(
             type="date",
-            showticklabels=False,
+            showticklabels=True,
+            tickfont=tick_font,
+            title=dict(text="", font=axis_title_font),
             showgrid=True,
             gridcolor="#f0f0f0",
             rangeslider=dict(visible=False),
@@ -244,7 +254,8 @@ def create_temperature_figure(df):
             linecolor="#303030",
         ),
         yaxis=dict(
-            title="°C",
+            title=dict(text="°C", font=axis_title_font),
+            tickfont=tick_font,
             gridcolor="#f0f0f0",
             showgrid=True,
             showline=True,
@@ -252,19 +263,12 @@ def create_temperature_figure(df):
             linecolor="#303030",
         ),
         margin=dict(b=80, t=40, l=60, r=30),
-        title=dict(text="Temperature", x=0.05, xanchor="left"),
+        title=dict(text="Temperature", x=0.05, xanchor="left", font=title_font),
         height=500,
         plot_bgcolor="whitesmoke",
         dragmode="zoom",
-        legend=dict(
-            orientation="h",
-            yanchor="top",
-            y=-0.2,
-            xanchor="center",
-            x=0.5,
-            traceorder="normal"
-        ),
-        font=dict(family="Roboto, sans-serif")
+        legend=dict(font=legend_font),
+        font=common_font
     )
     return fig
 
@@ -290,7 +294,9 @@ def create_air_quality_figure(df):
     fig.update_layout(
         xaxis=dict(
             type="date",
-            showticklabels=False,
+            showticklabels=True,
+            tickfont=tick_font,
+            title=dict(text="", font=axis_title_font),
             showgrid=True,
             gridcolor="#f0f0f0",
             rangeslider=dict(visible=False),
@@ -299,7 +305,8 @@ def create_air_quality_figure(df):
             linecolor="#303030",
         ),
         yaxis=dict(
-            title="µg/m³",
+            title=dict(text="µg/m³", font=axis_title_font),
+            tickfont=tick_font,
             gridcolor="#f0f0f0",
             showgrid=True,
             showline=True,
@@ -307,26 +314,39 @@ def create_air_quality_figure(df):
             linecolor="#303030",
         ),
         margin=dict(b=80, t=40, l=60, r=30),
-        title=dict(text="Air Quality Monitoring", x=0.05, xanchor="left"),
+        title=dict(text="Air Quality Monitoring", x=0.05, xanchor="left", font=title_font),
         height=500,
         plot_bgcolor="whitesmoke",
         dragmode="zoom",
-        legend=dict(
-            orientation="h",
-            yanchor="top",
-            y=-0.2,
-            xanchor="center",
-            x=0.5,
-            traceorder="normal"
-        ),
-        font=dict(family="Roboto, sans-serif")
+        legend=dict(font=legend_font),
+        font=common_font
     )
     return fig
 
 # Updated header with creative title effect using Dash components for a proper line break
 header = html.Div(
     [
-        # Foreground title (clear and readable)
+        html.Div(
+            [
+                "Experimental Environmental",
+                html.Br(),
+                "Monitoring Station"
+            ],
+            className="title-background",
+            style={
+                "position": "absolute",
+                "top": 0,
+                "left": 0,
+                "right": 0,
+                "bottom": 0,
+                "fontSize": "60px",
+                "color": "#999",
+                "filter": "blur(4px)",
+                "opacity": "0.3",
+                "textAlign": "center",
+                "lineHeight": "1.2"
+            }
+        ),
         html.Div(
             [
                 "Experimental Environmental",
@@ -370,29 +390,45 @@ footer = html.Footer(
     }
 )
 
+# Define smaller tab styling for both default and selected states
+tab_style = {
+    "padding": "5px 10px",
+    "fontSize": "12px",
+    "minHeight": "30px",
+    "fontFamily": "Roboto, sans-serif"
+}
+tab_selected_style = {
+    "padding": "5px 10px",
+    "fontSize": "12px",
+    "minHeight": "30px",
+    "fontFamily": "Roboto, sans-serif",
+    "backgroundColor": "#ddd",
+    "borderBottom": "2px solid #333"
+}
+
+# Updated layout with tabs and smooth transitions
 app.layout = html.Div(
     [
-        header,  # Your updated header with creative title
+        header,
         dcc.Interval(id="interval", interval=5000),
         dcc.Tabs(
             id="tabs",
             value="Temperature",
             children=[
-                dcc.Tab(label="Temperature", value="Temperature"),
-                dcc.Tab(label="Humidity", value="Humidity"),
-                dcc.Tab(label="Atmospheric Pressure", value="Atmospheric Pressure"),
-                dcc.Tab(label="Light Intensity", value="Light Intensity"),
-                dcc.Tab(label="UV Index", value="UV Index"),
-                dcc.Tab(label="Wind Rose", value="Wind Rose"),
-                dcc.Tab(label="Air Quality Monitoring", value="Air Quality Monitoring"),
-                dcc.Tab(label="Rain Accumulation", value="Rain Accumulation"),
+                dcc.Tab(label="Temperature", value="Temperature", style=tab_style, selected_style=tab_selected_style),
+                dcc.Tab(label="Humidity", value="Humidity", style=tab_style, selected_style=tab_selected_style),
+                dcc.Tab(label="Atmospheric Pressure", value="Atmospheric Pressure", style=tab_style, selected_style=tab_selected_style),
+                dcc.Tab(label="Light Intensity", value="Light Intensity", style=tab_style, selected_style=tab_selected_style),
+                dcc.Tab(label="UV Index", value="UV Index", style=tab_style, selected_style=tab_selected_style),
+                dcc.Tab(label="Wind Rose", value="Wind Rose", style=tab_style, selected_style=tab_selected_style),
+                dcc.Tab(label="Air Quality Monitoring", value="Air Quality Monitoring", style=tab_style, selected_style=tab_selected_style),
+                dcc.Tab(label="Rain Accumulation", value="Rain Accumulation", style=tab_style, selected_style=tab_selected_style),
             ],
-            style={"fontFamily": "Roboto, sans-serif", "fontWeight": "bold"},
             persistence=True,
             persistence_type="session"
         ),
         html.Div(id="tabs-content", style={"transition": "opacity 0.5s ease"}),
-        footer  # Designer credit in the footer
+        footer
     ],
     style={
         "padding": "40px",
