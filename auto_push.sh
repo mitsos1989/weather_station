@@ -1,3 +1,7 @@
+#!/bin/bash
+# Change directory to your repository folder
+cd /home/dimitris/weather_station || exit 1
+
 git add .
-git commit -m "automatic push git"
+git commit -m "automatic push git" || true
 git push heroku master
