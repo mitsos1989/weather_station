@@ -52,6 +52,7 @@ def update_db_from_csv():
         )
     
     conn.commit()
+    print("Database updated successfully.")
     cur.close()
     conn.close()
 
