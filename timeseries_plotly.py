@@ -566,6 +566,7 @@ def render_content(tab, n_intervals):
     )
 
 # New callback to update station status and last data timestamp
+
 @app.callback(
     Output("station-status", "children"),
     [Input("interval", "n_intervals")]
@@ -608,7 +609,18 @@ def update_station_status(n_intervals):
     ts_str = last_ts_greece.strftime("%Y-%m-%d %H:%M:%S")
     return html.Div(
         [indicator, html.Span(f"{status_text} (Last data at: {ts_str})")],
-        style={"fontSize": "16px", "fontFamily": "Roboto, sans-serif"}
+        style={
+            "fontSize": "16px",
+            "fontFamily": "Roboto, sans-serif",
+            "padding": "20px",
+            "border": "1px solid #ccc",
+            "borderRadius": "10px",
+            "margin": "0 auto",
+            "maxWidth": "500px",
+            "backgroundColor": "rgba(255, 255, 255, 0.8)",
+            "marginBottom": "30px",
+            "textAlign": "center"
+        }
     )
 
 if __name__ == "__main__":
