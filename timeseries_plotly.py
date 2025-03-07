@@ -266,34 +266,42 @@ def create_wind_rose(df):
 
 def create_temperature_figure(df):
     fig = go.Figure()
+
+    # MCP9808 (red) with smaller markers
     col_mcp = "Temperature (MCP9808) (°C)"
     if col_mcp in df.columns:
         fig.add_trace(
-            go.Scattergl(
+            go.Scatter(
                 x=df["timestamp"],
                 y=df[col_mcp],
-                mode="lines",
+                mode="lines+markers",
                 name="MCP9808",
-                line=dict(width=2, color="red")
+                line=dict(width=2, color="red"),
+                marker=dict(size=4)  # smaller markers
             )
         )
+
+    # BME280 (blue) with slightly transparent line
     col_bme = "Temperature (BME280) (°C)"
     if col_bme in df.columns:
         fig.add_trace(
-            go.Scattergl(
+            go.Scatter(
                 x=df["timestamp"],
                 y=df[col_bme],
                 mode="lines",
                 name="BME280",
-                line=dict(width=2, color="blue")
+                line=dict(width=2, color="blue", dash="solid"),
+                opacity=0.8
             )
         )
+
     fig.update_layout(
         xaxis=dict(
             type="date",
+            tickformat="%H:%M",
             showticklabels=True,
-            tickfont=tick_font,
-            title=dict(text="", font=axis_title_font),
+            tickfont=dict(size=14, family="Roboto, sans-serif"),
+            title=dict(text="", font=dict(size=16, family="Roboto, sans-serif")),
             showgrid=True,
             gridcolor="#f0f0f0",
             rangeslider=dict(visible=False),
@@ -302,8 +310,8 @@ def create_temperature_figure(df):
             linecolor="#303030"
         ),
         yaxis=dict(
-            title=dict(text="°C", font=axis_title_font),
-            tickfont=tick_font,
+            title=dict(text="Temperature (°C)", font=dict(size=16, family="Roboto, sans-serif")),
+            tickfont=dict(size=14, family="Roboto, sans-serif"),
             gridcolor="#f0f0f0",
             showgrid=True,
             showline=True,
@@ -311,15 +319,14 @@ def create_temperature_figure(df):
             linecolor="#303030"
         ),
         margin=dict(b=80, t=40, l=60, r=30),
-        title=dict(text="Temperature", x=0.05, xanchor="left", font=title_font),
+        title=dict(text="Temperature", x=0.05, xanchor="left", font=dict(size=20, family="Roboto, sans-serif")),
         width=900,
         height=500,
         plot_bgcolor="whitesmoke",
         dragmode="zoom",
-        font=common_font,
         legend=dict(
             orientation="h",
-            font=legend_font,
+            font=dict(size=16, family="Roboto, sans-serif"),
             x=0.5,
             xanchor="center",
             y=-0.2,
@@ -329,6 +336,9 @@ def create_temperature_figure(df):
     return fig
 
 def create_air_quality_figure(df):
+    # Ensure the data is sorted by timestamp
+    df = df.sort_values("timestamp")
+    
     fig = go.Figure()
     # Define threshold values (µg/m³)
     thresholds = {"PM1.0": 20, "PM2.5": 25, "PM10.0": 50}
@@ -340,7 +350,7 @@ def create_air_quality_figure(df):
     for col in cols:
         if col in df.columns:
             short_name = col.split("(")[0].strip()  # e.g., "PM1.0"
-            # For PM10.0, use the specified transparent green color
+            # For PM10.0, use the transparent green color
             if short_name == "PM10.0":
                 line_props = dict(width=2, shape='spline', smoothing=0.8, color='rgba(0, 128, 0, 0.5)')
             else:
@@ -368,25 +378,32 @@ def create_air_quality_figure(df):
                 xref="paper",
                 x=1.01,
                 y=thresh,
-                yshift=10,  # move label up a bit
+                yshift=10,
                 text=f"<b>{pollutant} ({thresh} µg/m³)</b>",
                 showarrow=False,
                 font=axis_title_font
             )
+    # Extend x-axis range slightly to ensure last point is visible
+    if not df.empty:
+        max_ts = df["timestamp"].max()
+        min_ts = df["timestamp"].min()
+        fig.update_layout(
+            xaxis=dict(
+                range=[min_ts, max_ts + pd.Timedelta(minutes=1)],
+                type="date",
+                tickformat="%H:%M",
+                showticklabels=True,
+                tickfont=tick_font,
+                title=dict(text="", font=axis_title_font),
+                showgrid=True,
+                gridcolor="#f0f0f0",
+                rangeslider=dict(visible=False),
+                showline=True,
+                linewidth=2,
+                linecolor="#303030"
+            )
+        )
     fig.update_layout(
-        xaxis=dict(
-            type="date",
-            tickformat="%H:%M",
-            showticklabels=True,
-            tickfont=tick_font,
-            title=dict(text="", font=axis_title_font),
-            showgrid=True,
-            gridcolor="#f0f0f0",
-            rangeslider=dict(visible=False),
-            showline=True,
-            linewidth=2,
-            linecolor="#303030"
-        ),
         yaxis=dict(
             title=dict(text="Concentration (µg/m³)", font=axis_title_font),
             tickfont=tick_font,
@@ -413,6 +430,61 @@ def create_air_quality_figure(df):
         )
     )
     return fig
+
+def create_dashboard(df):
+    if df.empty:
+        return html.Div("No data available", style={"textAlign": "center", "fontFamily": "Roboto, sans-serif"})
+    
+    # List all parameter columns except the timestamp.
+    parameters = [col for col in df.columns if col != "timestamp"]
+    rows = []
+    
+    for param in parameters:
+        # Filter out rows where this parameter is null
+        param_df = df[df[param].notnull()]
+        if not param_df.empty:
+            # Find the row with the maximum timestamp for this parameter
+            latest_row = param_df.loc[param_df["timestamp"].idxmax()]
+            latest_value = latest_row[param]
+            # Convert timestamp to Greece time and format it
+            latest_timestamp = latest_row["timestamp"].astimezone(ZoneInfo("Europe/Athens")).strftime("%Y-%m-%d %H:%M:%S")
+            
+            rows.append(
+                html.Tr([
+                    html.Td(param, style={"padding": "8px", "border": "1px solid #ccc"}),
+                    html.Td(latest_value, style={"padding": "8px", "border": "1px solid #ccc"}),
+                    html.Td(latest_timestamp, style={"padding": "8px", "border": "1px solid #ccc"})
+                ])
+            )
+    
+    header = html.Thead(
+        html.Tr([
+            html.Th("Parameter", style={"padding": "8px", "border": "1px solid #ccc"}),
+            html.Th("Latest Value", style={"padding": "8px", "border": "1px solid #ccc"}),
+            html.Th("Timestamp", style={"padding": "8px", "border": "1px solid #ccc"})
+        ])
+    )
+    
+    table = html.Table(
+        [header, html.Tbody(rows)],
+        style={"width": "100%", "margin": "0 auto", "borderCollapse": "collapse"}
+    )
+    
+    return html.Div(
+        [
+            html.H2("Latest Measurements", style={"fontFamily": "Roboto, sans-serif", "fontWeight": "bold"}),
+            table
+        ],
+        style={
+            "padding": "20px",
+            "textAlign": "center",
+            "backgroundColor": "rgba(255,255,255,0.8)",
+            "border": "1px solid #ccc",
+            "borderRadius": "10px",
+            "maxWidth": "600px",
+            "margin": "20px auto"
+        }
+    )
 
 # Updated header: only the clear foreground title remains.
 header = html.Div(
@@ -482,8 +554,9 @@ app.layout = html.Div(
         dcc.Interval(id="interval", interval=5000),
         dcc.Tabs(
             id="tabs",
-            value="Temperature",
+            value="Dashboard",  # default to Dashboard
             children=[
+                dcc.Tab(label="Dashboard", value="Dashboard", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="Temperature", value="Temperature", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="Humidity", value="Humidity", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="Atmospheric Pressure", value="Atmospheric Pressure", style=tab_style, selected_style=tab_selected_style),
@@ -523,30 +596,24 @@ app.layout = html.Div(
 )
 def render_content(tab, n_intervals):
     df = load_data()
-    if tab == "Temperature":
-        fig = create_temperature_figure(df)
-        content = dcc.Graph(figure=fig, className="dash-graph")
+    if tab == "Dashboard":
+        content = create_dashboard(df)
+    elif tab == "Temperature":
+        content = dcc.Graph(figure=create_temperature_figure(df), className="dash-graph")
     elif tab == "Humidity":
-        fig = create_line_figure(df, ["Humidity (BME280) (%)"], "Humidity", "%")
-        content = dcc.Graph(figure=fig, className="dash-graph")
+        content = dcc.Graph(figure=create_line_figure(df, ["Humidity (BME280) (%)"], "Humidity", "%"), className="dash-graph")
     elif tab == "Atmospheric Pressure":
-        fig = create_line_figure(df, ["Pressure (BME280) (hPa)"], "Atmospheric Pressure", "hPa")
-        content = dcc.Graph(figure=fig, className="dash-graph")
+        content = dcc.Graph(figure=create_line_figure(df, ["Pressure (BME280) (hPa)"], "Atmospheric Pressure", "hPa"), className="dash-graph")
     elif tab == "Light Intensity":
-        fig = create_line_figure(df, ["Light Intensity (BH1750) (lux)"], "Light Intensity", "lux")
-        content = dcc.Graph(figure=fig, className="dash-graph")
+        content = dcc.Graph(figure=create_line_figure(df, ["Light Intensity (BH1750) (lux)"], "Light Intensity", "lux"), className="dash-graph")
     elif tab == "UV Index":
-        fig = create_line_figure(df, ["UV Index (GY-8511)"], "UV Index", "")
-        content = dcc.Graph(figure=fig, className="dash-graph")
+        content = dcc.Graph(figure=create_line_figure(df, ["UV Index (GY-8511)"], "UV Index", ""), className="dash-graph")
     elif tab == "Wind Rose":
-        fig = create_wind_rose(df)
-        content = dcc.Graph(figure=fig, className="dash-graph")
+        content = dcc.Graph(figure=create_wind_rose(df), className="dash-graph")
     elif tab == "Air Quality Monitoring":
-        fig = create_air_quality_figure(df)
-        content = dcc.Graph(figure=fig, className="dash-graph")
+        content = dcc.Graph(figure=create_air_quality_figure(df), className="dash-graph")
     elif tab == "Rain Accumulation":
-        fig = create_bar_figure(df, "Rain Accumulation (SEN0575) (mm)", "Rain Accumulation", "mm")
-        content = dcc.Graph(figure=fig, className="dash-graph")
+        content = dcc.Graph(figure=create_bar_figure(df, "Rain Accumulation (SEN0575) (mm)", "Rain Accumulation", "mm"), className="dash-graph")
     elif tab == "Cloud Camera":
         img_src = get_latest_cloud_camera_image()
         if img_src is None:
