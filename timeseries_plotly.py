@@ -206,16 +206,33 @@ def create_wind_rose(df):
     if df.empty or "Wind Direction (Wind Vane) (deg)" not in df.columns:
         return go.Figure()
     try:
+        # Copy the required columns
         wind_df = df[["Wind Direction (Wind Vane) (deg)", "Wind Speed (Anemometer) (m/s)"]].copy()
-        wind_df["direction"] = wind_df["Wind Direction (Wind Vane) (deg)"] % 360
-        bins = np.arange(-11.25, 348.76, 22.5)
-        labels = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
-        wind_df["direction"] = pd.cut(
-            wind_df["direction"],
-            bins=bins,
-            labels=labels,
-            include_lowest=True
-        )
+        # Compute the wind direction modulo 360
+        wind_df["deg"] = wind_df["Wind Direction (Wind Vane) (deg)"] % 360
+
+        # Function to map degrees to 8 cardinal directions
+        def cardinal_direction(deg):
+            if deg < 22.5 or deg >= 337.5:
+                return "N"
+            elif deg < 67.5:
+                return "NE"
+            elif deg < 112.5:
+                return "E"
+            elif deg < 157.5:
+                return "SE"
+            elif deg < 202.5:
+                return "S"
+            elif deg < 247.5:
+                return "SW"
+            elif deg < 292.5:
+                return "W"
+            elif deg < 337.5:
+                return "NW"
+
+        wind_df["cardinal"] = wind_df["deg"].apply(cardinal_direction)
+
+        # Bin wind speeds into categories
         speed_bins = [0, 1, 2, 3, 4, 5, 6, 20]
         speed_labels = ["0-1", "1-2", "2-3", "3-4", "4-5", "5-6", "6+"]
         wind_df["strength"] = pd.cut(
@@ -223,22 +240,31 @@ def create_wind_rose(df):
             bins=speed_bins,
             labels=speed_labels
         )
-        wind_df = wind_df.groupby(["direction", "strength"], observed=False).size().reset_index(name="frequency")
+
+        # Group the data by the cardinal direction and wind speed category
+        wind_df = wind_df.groupby(["cardinal", "strength"], observed=False).size().reset_index(name="frequency")
+
+        # Create the polar bar chart
         fig = px.bar_polar(
             wind_df,
             r="frequency",
-            theta="direction",
+            theta="cardinal",
             color="strength",
             template="plotly_white",
             color_discrete_sequence=px.colors.sequential.Plasma_r,
             direction="clockwise",
             start_angle=90
         )
+
+        # Update the angular axis to enforce the 8 cardinal points in order
         fig.update_layout(
             polar=dict(
                 angularaxis=dict(
-                    tickvals=np.arange(0, 360, 22.5),
-                    ticktext=labels,
+                    tickmode="array",
+                    tickvals=["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
+                    ticktext=["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
+                    categoryorder="array",
+                    categoryarray=["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
                     tickfont=tick_font,
                     gridcolor="#f0f0f0"
                 ),
@@ -277,7 +303,7 @@ def create_temperature_figure(df):
                 mode="lines+markers",
                 name="MCP9808",
                 line=dict(width=2, color="red"),
-                marker=dict(size=4)  # smaller markers
+                marker=dict(size=3)  # smaller markers
             )
         )
 
@@ -361,6 +387,7 @@ def create_air_quality_figure(df):
                     y=df[col],
                     mode="lines",
                     name=short_name,
+                    connectgaps=True,
                     line=line_props
                 )
             )
