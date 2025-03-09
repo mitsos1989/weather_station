@@ -233,8 +233,8 @@ def create_wind_rose(df):
         wind_df["cardinal"] = wind_df["deg"].apply(cardinal_direction)
 
         # Bin wind speeds into categories
-        speed_bins = [0, 1, 2, 3, 4, 5, 6, 20]
-        speed_labels = ["0-1", "1-2", "2-3", "3-4", "4-5", "5-6", "6+"]
+        speed_bins = [0, 1, 2, 3, 4, 5, 6, 7, 10, 20, 35]
+        speed_labels = ["0-1", "1-2", "2-3", "3-4", "4-5", "5-6", "6-7", "7-10", "10-20", "20+"]
         wind_df["strength"] = pd.cut(
             wind_df["Wind Speed (Anemometer) (m/s)"],
             bins=speed_bins,
@@ -614,8 +614,18 @@ app.layout = html.Div(
     }
 )
 
+def create_wind_rose_range(df, time_delta, title_text):
+    # Get current UTC time
+    now_utc = datetime.now(ZoneInfo("UTC"))
+    # Filter the DataFrame based on the time_delta
+    filtered_df = df[df["timestamp"] >= now_utc - time_delta]
+    # Create the wind rose from the filtered data
+    fig = create_wind_rose(filtered_df)
+    # Update the title of the wind rose
+    fig.update_layout(title=dict(text=title_text, font=title_font))
+    return fig
 
-# Callback to update tab content with a loading effect during data refresh
+# In your callback for tab content:
 @app.callback(
     Output("tabs-content", "children"),
     [Input("tabs", "value"),
@@ -636,7 +646,22 @@ def render_content(tab, n_intervals):
     elif tab == "UV Index":
         content = dcc.Graph(figure=create_line_figure(df, ["UV Index (GY-8511)"], "UV Index", ""), className="dash-graph")
     elif tab == "Wind Rose":
-        content = dcc.Graph(figure=create_wind_rose(df), className="dash-graph")
+        wind_rose_24 = dcc.Graph(
+            figure=create_wind_rose_range(df, timedelta(hours=24), "Last 24 hours"),
+            className="dash-graph"
+        )
+        wind_rose_1 = dcc.Graph(
+            figure=create_wind_rose_range(df, timedelta(hours=1), "Last 1 hour"),
+            className="dash-graph"
+        )
+        wind_rose_10 = dcc.Graph(
+            figure=create_wind_rose_range(df, timedelta(minutes=10), "Last 10 minutes"),
+            className="dash-graph"
+        )
+        content = html.Div(
+            [wind_rose_24, wind_rose_1, wind_rose_10],
+            style={"display": "flex", "justifyContent": "space-around", "flexWrap": "wrap"}
+        )
     elif tab == "Air Quality Monitoring":
         content = dcc.Graph(figure=create_air_quality_figure(df), className="dash-graph")
     elif tab == "Rain Accumulation":
