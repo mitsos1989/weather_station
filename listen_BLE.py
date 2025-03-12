@@ -33,6 +33,11 @@ print("Using BLE adapter with address:", adapter_address)
 # Create the BLE peripheral with a local name.
 ble_peripheral = peripheral.Peripheral(adapter_address, "ESP32_Receiver")
 
+ble_peripheral.advertisement = {
+    'local_name': "ESP32_Receiver",
+    'service_uuid': DATA_SERVICE_UUID
+}
+
 # Add a service with the custom UUID.
 ble_peripheral.add_service(srv_id=1, uuid=DATA_SERVICE_UUID, primary=True)
 

@@ -88,6 +88,14 @@ def get_latest_cloud_camera_image():
         encoded = base64.b64encode(f.read()).decode("utf-8")
     return "data:image/jpeg;base64," + encoded
 
+def get_satellite_image():
+    path = "/home/dimitris/weather_station/satellite_latest/satellite_greece.jpg"
+    if not os.path.exists(path):
+        return None
+    with open(path, "rb") as f:
+        encoded = base64.b64encode(f.read()).decode("utf-8")
+    return "data:image/jpeg;base64," + encoded
+
 # Common font settings for figures
 common_font = dict(family="Roboto, sans-serif")
 title_font = dict(size=20, family="Roboto, sans-serif")
@@ -592,7 +600,8 @@ app.layout = html.Div(
                 dcc.Tab(label="Wind Rose", value="Wind Rose", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="Air Quality Monitoring", value="Air Quality Monitoring", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="Rain Accumulation", value="Rain Accumulation", style=tab_style, selected_style=tab_selected_style),
-                dcc.Tab(label="Cloud Camera", value="Cloud Camera", style=tab_style, selected_style=tab_selected_style)
+                dcc.Tab(label="Cloud Camera", value="Cloud Camera", style=tab_style, selected_style=tab_selected_style),
+                dcc.Tab(label="Satellite Greece", value="Satellite Greece", style=tab_style, selected_style=tab_selected_style)
             ],
             persistence=True,
             persistence_type="session",
@@ -673,6 +682,15 @@ def render_content(tab, n_intervals):
         else:
             content = html.Div(
                 html.Img(src=img_src, style={"maxWidth": "100%", "height": "auto"}),
+                style={"textAlign": "center", "padding": "20px"}
+            )
+    elif tab == "Satellite Greece":
+        sat_img = get_satellite_image()
+        if sat_img is None:
+            content = html.Div("No satellite image found.", style={"textAlign": "center", "padding": "20px"})
+        else:
+            content = html.Div(
+                html.Img(src=sat_img, style={"maxWidth": "100%", "height": "auto"}),
                 style={"textAlign": "center", "padding": "20px"}
             )
     else:
