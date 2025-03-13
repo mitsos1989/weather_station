@@ -115,6 +115,7 @@ def create_line_figure(df, y_cols, title, ytitle):
                     y=df[col],
                     mode="lines",
                     name=col.split("(")[0].strip(),
+                    connectgaps=True,
                     line=dict(width=2)
                 )
             )
