@@ -471,54 +471,126 @@ def create_dashboard(df):
     if df.empty:
         return html.Div("No data available", style={"textAlign": "center", "fontFamily": "Roboto, sans-serif"})
     
-    # List all parameter columns except the timestamp.
-    parameters = [col for col in df.columns if col != "timestamp"]
-    rows = []
+    # Define the parameters to display in the dashboard.
+    dashboard_parameters = [
+        "Temperature (BME280) (°C)",
+        "Temperature (MCP9808) (°C)",
+        "Humidity (BME280) (%)",
+        "Pressure (BME280) (hPa)",
+        "PM1.0 (PMSA003I) (µg/m³)",
+        "PM2.5 (PMSA003I) (µg/m³)",
+        "PM10.0 (PMSA003I) (µg/m³)",
+        "Wind Speed (Anemometer) (m/s)",
+        "UV Index (GY-8511)"
+    ]
     
-    for param in parameters:
-        # Filter out rows where this parameter is null
-        param_df = df[df[param].notnull()]
-        if not param_df.empty:
-            # Find the row with the maximum timestamp for this parameter
-            latest_row = param_df.loc[param_df["timestamp"].idxmax()]
-            latest_value = latest_row[param]
-            # Convert timestamp to Greece time and format it
-            latest_timestamp = latest_row["timestamp"].astimezone(ZoneInfo("Europe/Athens")).strftime("%Y-%m-%d %H:%M:%S")
+    # Define which parameters get min and max vs. max only.
+    extra_stats = {
+        "Temperature (BME280) (°C)": "minmax",
+        "Temperature (MCP9808) (°C)": "minmax",
+        "Humidity (BME280) (%)": "minmax",
+        "Pressure (BME280) (hPa)": "minmax",
+        "PM1.0 (PMSA003I) (µg/m³)": "minmax",
+        "PM2.5 (PMSA003I) (µg/m³)": "minmax",
+        "PM10.0 (PMSA003I) (µg/m³)": "minmax",
+        "Wind Speed (Anemometer) (m/s)": "max",
+        "UV Index (GY-8511)": "max"
+    }
+    
+    # Define thresholds for PM parameters.
+    pm_thresholds = {
+        "PM1.0 (PMSA003I) (µg/m³)": 20,
+        "PM2.5 (PMSA003I) (µg/m³)": 25,
+        "PM10.0 (PMSA003I) (µg/m³)": 50
+    }
+    
+    rows = []
+    for param in dashboard_parameters:
+        if param in df.columns:
+            df_param = df[df[param].notnull()]
+            # Simplify the parameter name: keep the text before the first parenthesis and add the unit (from the last parentheses)
+            unit_start = param.rfind("(")
+            if unit_start != -1:
+                unit_str = param[unit_start:].strip()  # e.g., "(°C)"
+                display_param = param.split(" (")[0] + " " + unit_str
+            else:
+                display_param = param
+            
+            if df_param.empty:
+                latest_value = "N/A"
+                stats_str = ""
+            else:
+                # Latest measurement
+                latest_row = df_param.loc[df_param["timestamp"].idxmax()]
+                latest_value = latest_row[param]
+                
+                if extra_stats.get(param) == "minmax":
+                    # Calculate min and max values and their timestamps
+                    min_val = df_param[param].min()
+                    max_val = df_param[param].max()
+                    min_row = df_param[df_param[param] == min_val].iloc[0]
+                    max_row = df_param[df_param[param] == max_val].iloc[0]
+                    # Format timestamps to show only hour and minute.
+                    min_ts = min_row["timestamp"].astimezone(ZoneInfo("Europe/Athens")).strftime("%H:%M")
+                    max_ts = max_row["timestamp"].astimezone(ZoneInfo("Europe/Athens")).strftime("%H:%M")
+                    stats_str = f"Min: {min_val} ({min_ts}), Max: {max_val} ({max_ts})"
+                elif extra_stats.get(param) == "max":
+                    max_val = df_param[param].max()
+                    max_row = df_param[df_param[param] == max_val].iloc[0]
+                    max_ts = max_row["timestamp"].astimezone(ZoneInfo("Europe/Athens")).strftime("%H:%M")
+                    stats_str = f"Max: {max_val} ({max_ts})"
+                else:
+                    stats_str = ""
+            
+            # For PM parameters, if the latest and maximum values exceed thresholds, apply bold red styling.
+            value_style = {}
+            if param in pm_thresholds and not df_param.empty:
+                threshold = pm_thresholds[param]
+                if latest_value > threshold:
+                    if extra_stats.get(param) == "minmax":
+                        max_val = df_param[param].max()
+                    else:
+                        max_val = None
+                    if (max_val is not None and max_val > threshold) or (max_val is None):
+                        value_style = {"color": "red", "fontWeight": "bold"}
             
             rows.append(
                 html.Tr([
-                    html.Td(param, style={"padding": "8px", "border": "1px solid #ccc"}),
-                    html.Td(latest_value, style={"padding": "8px", "border": "1px solid #ccc"}),
-                    html.Td(latest_timestamp, style={"padding": "8px", "border": "1px solid #ccc"})
+                    html.Td(display_param, style={"padding": "8px", "border": "1px solid #ccc", "fontSize": "14px"}),
+                    html.Td(latest_value, style={"padding": "8px", "border": "1px solid #ccc", "fontSize": "14px", **value_style}),
+                    html.Td(stats_str, style={"padding": "8px", "border": "1px solid #ccc", "fontSize": "14px", **value_style})
                 ])
             )
     
-    header = html.Thead(
+    header_table = html.Thead(
         html.Tr([
-            html.Th("Parameter", style={"padding": "8px", "border": "1px solid #ccc"}),
-            html.Th("Latest Value", style={"padding": "8px", "border": "1px solid #ccc"}),
-            html.Th("Timestamp", style={"padding": "8px", "border": "1px solid #ccc"})
+            html.Th("Parameter", style={"padding": "8px", "border": "1px solid #ccc", "fontSize": "14px"}),
+            html.Th("Latest Value", style={"padding": "8px", "border": "1px solid #ccc", "fontSize": "14px"}),
+            html.Th("Min/Max (with Timestamps)", style={"padding": "8px", "border": "1px solid #ccc", "fontSize": "14px"})
         ])
     )
     
     table = html.Table(
-        [header, html.Tbody(rows)],
+        [header_table, html.Tbody(rows)],
         style={"width": "100%", "margin": "0 auto", "borderCollapse": "collapse"}
     )
     
+    # Mobile-friendly layout: adjust container width for a typical smartphone.
     return html.Div(
         [
-            html.H2("Latest Measurements", style={"fontFamily": "Roboto, sans-serif", "fontWeight": "bold"}),
+            html.H2("Latest Measurements", style={"fontFamily": "Roboto, sans-serif", "fontWeight": "bold", "fontSize": "20px"}),
             table
         ],
         style={
-            "padding": "20px",
+            "padding": "10px",
             "textAlign": "center",
-            "backgroundColor": "rgba(255,255,255,0.8)",
+            "backgroundColor": "rgba(255,255,255,0.9)",
             "border": "1px solid #ccc",
             "borderRadius": "10px",
-            "maxWidth": "600px",
-            "margin": "20px auto"
+            "width": "100%",
+            "maxWidth": "400px",
+            "margin": "20px auto",
+            "fontFamily": "Roboto, sans-serif"
         }
     )
 
