@@ -29132,3 +29132,7 @@ Untracked files:
 
 no changes added to commit (use "git add" and/or "git commit -a")
 Everything up-to-date
+error: insufficient permission for adding an object to repository database .git/objects
+error: whole_sky_camera/15-03-2025_16:23:08.jpg: failed to insert into database
+error: unable to index file 'whole_sky_camera/15-03-2025_16:23:08.jpg'
+fatal: adding files failed
