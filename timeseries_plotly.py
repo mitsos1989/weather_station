@@ -7,6 +7,8 @@ import plotly.express as px
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo  # Python 3.9+
 import os, glob, base64
+import imageio.v2 as imageio
+import io
 
 # Include Roboto font from Google Fonts
 external_stylesheets = ['https://fonts.googleapis.com/css?family=Roboto:400,700']
@@ -49,7 +51,8 @@ def load_data():
         df = pd.read_csv(
             CSV_PATH,
             parse_dates=["timestamp"],
-            date_format="%Y-%m-%d %H:%M:%S"
+            date_format="%Y-%m-%d %H:%M:%S",
+            low_memory=False
         )
         # Localize the naive timestamps to UTC (data are in UTC)
         df["timestamp"] = df["timestamp"].dt.tz_localize("UTC")
@@ -88,6 +91,28 @@ def get_latest_cloud_camera_image():
         encoded = base64.b64encode(f.read()).decode("utf-8")
     return "data:image/jpeg;base64," + encoded
 
+def get_camera_gif():
+    # Get list of jpg files in the whole_sky_camera folder
+    files = glob.glob("whole_sky_camera/*.jpg")
+    if not files:
+        return None
+    # Sort files by creation time descending (latest first)
+    files_sorted = sorted(files, key=os.path.getctime, reverse=True)
+    # Take the latest 10 images (if there are less than 10, it takes all)
+    latest_10_files = files_sorted[:10]
+    # Read each image using imageio
+    images = [imageio.imread(f) for f in latest_10_files]
+    # Create an in-memory binary stream
+    gif_bytes = io.BytesIO()
+    # Write the images as a GIF to the binary stream. Each frame lasts 0.2 seconds.
+    imageio.mimwrite(gif_bytes, images, format="GIF", duration=0.2)
+    gif_bytes.seek(0)
+    # Encode the binary GIF in base64
+    gif_base64 = base64.b64encode(gif_bytes.read()).decode("utf-8")
+    return "data:image/gif;base64," + gif_base64
+
+
+
 def get_satellite_image():
     path = "/home/dimitris/weather_station/satellite_latest/satellite_greece.jpg"
     if not os.path.exists(path):
@@ -114,18 +139,19 @@ def create_line_figure(df, y_cols, title, ytitle):
                     x=df["timestamp"],
                     y=df[col],
                     mode="lines",
-                    name=col.split("(")[0].strip(),
                     connectgaps=True,
+                    name=col.split("(")[0].strip(),
                     line=dict(width=2)
                 )
             )
     fig.update_layout(
         xaxis=dict(
             type="date",
-            tickformat="%H:%M",  # Display time in hh:mm format
+            tickformat="%H:%M",  # Display date and time
             showticklabels=True,
+            tickangle=00,
             tickfont=tick_font,
-            title=dict(text="", font=axis_title_font),
+            title=dict(text="Time (UTC)", font=axis_title_font),
             showgrid=True,
             gridcolor="#f0f0f0",
             rangeslider=dict(visible=False),
@@ -142,7 +168,7 @@ def create_line_figure(df, y_cols, title, ytitle):
             linewidth=2,
             linecolor="#303030"
         ),
-        margin=dict(b=80, t=40, l=60, r=30),
+        margin=dict(b=120, t=40, l=60, r=30),
         title=dict(text=title, x=0.05, xanchor="left", font=title_font),
         width=900,
         height=500,
@@ -174,9 +200,10 @@ def create_bar_figure(df, col, title, ytitle):
     fig.update_layout(
         xaxis=dict(
             type="date",
+            tickformat="%H:%M",
             showticklabels=True,
             tickfont=tick_font,
-            title=dict(text="", font=axis_title_font),
+            title=dict(text="Time (UTC)", font=axis_title_font),
             showgrid=True,
             gridcolor="#f0f0f0",
             rangeslider=dict(visible=False),
@@ -193,7 +220,7 @@ def create_bar_figure(df, col, title, ytitle):
             linewidth=2,
             linecolor="#303030"
         ),
-        margin=dict(b=80, t=40, l=60, r=30),
+        margin=dict(b=120, t=40, l=60, r=30),
         title=dict(text=title, x=0.05, xanchor="left", font=title_font),
         width=900,
         height=500,
@@ -215,12 +242,9 @@ def create_wind_rose(df):
     if df.empty or "Wind Direction (Wind Vane) (deg)" not in df.columns:
         return go.Figure()
     try:
-        # Copy the required columns
         wind_df = df[["Wind Direction (Wind Vane) (deg)", "Wind Speed (Anemometer) (m/s)"]].copy()
-        # Compute the wind direction modulo 360
         wind_df["deg"] = wind_df["Wind Direction (Wind Vane) (deg)"] % 360
 
-        # Function to map degrees to 8 cardinal directions
         def cardinal_direction(deg):
             if deg < 22.5 or deg >= 337.5:
                 return "N"
@@ -241,31 +265,28 @@ def create_wind_rose(df):
 
         wind_df["cardinal"] = wind_df["deg"].apply(cardinal_direction)
 
-        # Bin wind speeds into categories
-        speed_bins = [0, 1, 2, 3, 4, 5, 6, 7, 10, 20, 35]
-        speed_labels = ["0-1", "1-2", "2-3", "3-4", "4-5", "5-6", "6-7", "7-10", "10-20", "20+"]
+        speed_bins = [0, 1, 2, 3, 4, 5, 6, 20]
+        speed_labels = ["0-1", "1-2", "2-3", "3-4", "4-5", "5-6", "6+"]
         wind_df["strength"] = pd.cut(
             wind_df["Wind Speed (Anemometer) (m/s)"],
             bins=speed_bins,
             labels=speed_labels
         )
 
-        # Group the data by the cardinal direction and wind speed category
         wind_df = wind_df.groupby(["cardinal", "strength"], observed=False).size().reset_index(name="frequency")
 
-        # Create the polar bar chart
         fig = px.bar_polar(
             wind_df,
             r="frequency",
             theta="cardinal",
             color="strength",
+            labels={"strength": "Wind Speed (m/s)"},  # Updated legend title
             template="plotly_white",
             color_discrete_sequence=px.colors.sequential.Plasma_r,
             direction="clockwise",
             start_angle=90
         )
 
-        # Update the angular axis to enforce the 8 cardinal points in order
         fig.update_layout(
             polar=dict(
                 angularaxis=dict(
@@ -312,7 +333,7 @@ def create_temperature_figure(df):
                 mode="lines+markers",
                 name="MCP9808",
                 line=dict(width=2, color="red"),
-                marker=dict(size=3)  # smaller markers
+                marker=dict(size=4)
             )
         )
 
@@ -335,8 +356,9 @@ def create_temperature_figure(df):
             type="date",
             tickformat="%H:%M",
             showticklabels=True,
+            tickangle=0,
             tickfont=dict(size=14, family="Roboto, sans-serif"),
-            title=dict(text="", font=dict(size=16, family="Roboto, sans-serif")),
+            title=dict(text="Time (UTC)", font=dict(size=16, family="Roboto, sans-serif")),
             showgrid=True,
             gridcolor="#f0f0f0",
             rangeslider=dict(visible=False),
@@ -353,7 +375,7 @@ def create_temperature_figure(df):
             linewidth=2,
             linecolor="#303030"
         ),
-        margin=dict(b=80, t=40, l=60, r=30),
+        margin=dict(b=120, t=40, l=60, r=30),
         title=dict(text="Temperature", x=0.05, xanchor="left", font=dict(size=20, family="Roboto, sans-serif")),
         width=900,
         height=500,
@@ -720,13 +742,27 @@ def render_content(tab, n_intervals):
     elif tab == "Temperature":
         content = dcc.Graph(figure=create_temperature_figure(df), className="dash-graph")
     elif tab == "Humidity":
-        content = dcc.Graph(figure=create_line_figure(df, ["Humidity (BME280) (%)"], "Humidity", "%"), className="dash-graph")
+        # Update title to "Relative Humidity"
+        content = dcc.Graph(
+            figure=create_line_figure(df, ["Humidity (BME280) (%)"], "Relative Humidity", "%"),
+            className="dash-graph"
+        )
     elif tab == "Atmospheric Pressure":
-        content = dcc.Graph(figure=create_line_figure(df, ["Pressure (BME280) (hPa)"], "Atmospheric Pressure", "hPa"), className="dash-graph")
+        content = dcc.Graph(
+            figure=create_line_figure(df, ["Pressure (BME280) (hPa)"], "Atmospheric Pressure", "hPa"),
+            className="dash-graph"
+        )
     elif tab == "Light Intensity":
-        content = dcc.Graph(figure=create_line_figure(df, ["Light Intensity (BH1750) (lux)"], "Light Intensity", "lux"), className="dash-graph")
+        # Update title and y-axis title for Light Intensity
+        content = dcc.Graph(
+            figure=create_line_figure(df, ["Light Intensity (BH1750) (lux)"], "Ambient Visible Light", "Illuminance (lux)"),
+            className="dash-graph"
+        )
     elif tab == "UV Index":
-        content = dcc.Graph(figure=create_line_figure(df, ["UV Index (GY-8511)"], "UV Index", ""), className="dash-graph")
+        content = dcc.Graph(
+            figure=create_line_figure(df, ["UV Index (GY-8511)"], "UV Index", ""),
+            className="dash-graph"
+        )
     elif tab == "Wind Rose":
         wind_rose_24 = dcc.Graph(
             figure=create_wind_rose_range(df, timedelta(hours=24), "Last 24 hours"),
@@ -747,7 +783,11 @@ def render_content(tab, n_intervals):
     elif tab == "Air Quality Monitoring":
         content = dcc.Graph(figure=create_air_quality_figure(df), className="dash-graph")
     elif tab == "Rain Accumulation":
-        content = dcc.Graph(figure=create_bar_figure(df, "Rain Accumulation (SEN0575) (mm)", "Rain Accumulation", "mm"), className="dash-graph")
+        # Update title and y-axis title for Rain Accumulation
+        content = dcc.Graph(
+            figure=create_bar_figure(df, "Rain Accumulation (SEN0575) (mm)", "Rain Accumulation (last 24 hours)", "Precipitation Height (mm)"),
+            className="dash-graph"
+        )
     elif tab == "Cloud Camera":
         img_src = get_latest_cloud_camera_image()
         if img_src is None:
@@ -816,7 +856,7 @@ def update_station_status(n_intervals):
                 "marginRight": "10px"
             }
         )
-    ts_str = last_ts_greece.strftime("%Y-%m-%d %H:%M:%S")
+    ts_str = last_ts_greece.strftime("%Y-%m-%d %H:%M")
     return html.Div(
         [indicator, html.Span(f"{status_text} (Last data at: {ts_str})")],
         style={

@@ -1,6 +1,6 @@
 {
-  "name": "Weather Station Dashboard",
-  "short_name": "Weather",
+  "name": "Weather-Krini",
+  "short_name": "Weather-Krini",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f8f8f8",
