@@ -7,8 +7,15 @@ import plotly.express as px
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo  # Python 3.9+
 import os, glob, base64
-import imageio.v2 as imageio
 import io
+import math
+
+'''
+# Initialize your bot with your API token
+TELEGRAM_BOT_TOKEN = "7490920595:AAENnqGchyNDxMlHeAZIwydUDFH-GCm3an8"
+TELEGRAM_CHAT_ID = "851089620"  # Could be a string or integer
+'''
+
 
 # Include Roboto font from Google Fonts
 external_stylesheets = ['https://fonts.googleapis.com/css?family=Roboto:400,700']
@@ -56,7 +63,6 @@ def load_data():
         )
         # Localize the naive timestamps to UTC (data are in UTC)
         df["timestamp"] = df["timestamp"].dt.tz_localize("UTC")
-        
         # Get current time in Greece (Europe/Athens)
         now_greece = datetime.now(ZoneInfo("Europe/Athens"))
         threshold = now_greece - timedelta(hours=24)
@@ -82,6 +88,8 @@ def load_data():
         print(f"Error loading data: {e}")
         return pd.DataFrame()
 
+
+
 def get_latest_cloud_camera_image():
     files = glob.glob("whole_sky_camera/*.jpg")
     if not files:
@@ -90,7 +98,7 @@ def get_latest_cloud_camera_image():
     with open(latest_file, "rb") as f:
         encoded = base64.b64encode(f.read()).decode("utf-8")
     return "data:image/jpeg;base64," + encoded
-
+'''
 def get_camera_gif():
     # Get list of jpg files in the whole_sky_camera folder
     files = glob.glob("whole_sky_camera/*.jpg")
@@ -110,7 +118,7 @@ def get_camera_gif():
     # Encode the binary GIF in base64
     gif_base64 = base64.b64encode(gif_bytes.read()).decode("utf-8")
     return "data:image/gif;base64," + gif_base64
-
+'''
 
 
 def get_satellite_image():
@@ -197,10 +205,23 @@ def create_bar_figure(df, col, title, ytitle):
                 marker_color="royalblue"
             )
         )
+    # Set up y-axis configuration.
+    yaxis_config = dict(
+        title=dict(text=ytitle, font=axis_title_font),
+        tickfont=tick_font,
+        gridcolor="#f0f0f0",
+        showgrid=True,
+        showline=True,
+        linewidth=2,
+        linecolor="#303030"
+    )
+    # If this is the Rain Accumulation graph, force the minimum to 0.
+    if col == "Rain Accumulation (SEN0575) (mm)":
+        yaxis_config["rangemode"] = "tozero"
+    
     fig.update_layout(
         xaxis=dict(
             type="date",
-            tickformat="%H:%M",
             showticklabels=True,
             tickfont=tick_font,
             title=dict(text="Time (UTC)", font=axis_title_font),
@@ -211,15 +232,7 @@ def create_bar_figure(df, col, title, ytitle):
             linewidth=2,
             linecolor="#303030"
         ),
-        yaxis=dict(
-            title=dict(text=ytitle, font=axis_title_font),
-            tickfont=tick_font,
-            gridcolor="#f0f0f0",
-            showgrid=True,
-            showline=True,
-            linewidth=2,
-            linecolor="#303030"
-        ),
+        yaxis=yaxis_config,
         margin=dict(b=120, t=40, l=60, r=30),
         title=dict(text=title, x=0.05, xanchor="left", font=title_font),
         width=900,
@@ -237,6 +250,66 @@ def create_bar_figure(df, col, title, ytitle):
         )
     )
     return fig
+
+def create_rain_line_figure(df, col, title, ytitle):
+    fig = go.Figure()
+    if col in df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df["timestamp"],
+                y=df[col],
+                mode="lines",
+                name=col.split(" (")[0],
+                line=dict(width=2, color="blue"),
+                connectgaps=True  # <-- Add this to connect the non-NaN points
+            )
+        )
+    
+    # Force y-axis minimum to 0
+    yaxis_config = dict(
+        title=dict(text=ytitle, font=axis_title_font),
+        tickfont=tick_font,
+        gridcolor="#f0f0f0",
+        showgrid=True,
+        showline=True,
+        linewidth=2,
+        linecolor="#303030",
+        rangemode="tozero"  # ensures y-axis starts at 0
+    )
+    
+    fig.update_layout(
+        xaxis=dict(
+            type="date",
+            tickformat="%m-%d %H:%M",
+            showticklabels=True,
+            tickfont=tick_font,
+            title=dict(text="Time (UTC)", font=axis_title_font),
+            showgrid=True,
+            gridcolor="#f0f0f0",
+            rangeslider=dict(visible=False),
+            showline=True,
+            linewidth=2,
+            linecolor="#303030"
+        ),
+        yaxis=yaxis_config,
+        margin=dict(b=120, t=40, l=60, r=30),
+        title=dict(text=title, x=0.05, xanchor="left", font=title_font),
+        width=900,
+        height=500,
+        plot_bgcolor="whitesmoke",
+        dragmode="zoom",
+        font=common_font,
+        legend=dict(
+            orientation="h",
+            font=legend_font,
+            x=0.5,
+            xanchor="center",
+            y=-0.2,
+            yanchor="top"
+        )
+    )
+    return fig
+
 
 def create_wind_rose(df):
     if df.empty or "Wind Direction (Wind Vane) (deg)" not in df.columns:
@@ -265,8 +338,8 @@ def create_wind_rose(df):
 
         wind_df["cardinal"] = wind_df["deg"].apply(cardinal_direction)
 
-        speed_bins = [0, 1, 2, 3, 4, 5, 6, 20]
-        speed_labels = ["0-1", "1-2", "2-3", "3-4", "4-5", "5-6", "6+"]
+        speed_bins = [0, 1, 2, 3, 4, 5, 6, 7, 10, 15, 25]
+        speed_labels = ["0-1", "1-2", "2-3", "3-4", "4-5", "5-6", "6-7", "7-10", "10-15", "15+"]
         wind_df["strength"] = pd.cut(
             wind_df["Wind Speed (Anemometer) (m/s)"],
             bins=speed_bins,
@@ -493,7 +566,7 @@ def create_dashboard(df):
     if df.empty:
         return html.Div("No data available", style={"textAlign": "center", "fontFamily": "Roboto, sans-serif"})
     
-    # Define the parameters to display in the dashboard.
+    # Define the parameters to display in the summary table.
     dashboard_parameters = [
         "Temperature (BME280) (°C)",
         "Temperature (MCP9808) (°C)",
@@ -506,7 +579,7 @@ def create_dashboard(df):
         "UV Index (GY-8511)"
     ]
     
-    # Define which parameters get min and max vs. max only.
+    # Define which parameters get both min and max versus max only.
     extra_stats = {
         "Temperature (BME280) (°C)": "minmax",
         "Temperature (MCP9808) (°C)": "minmax",
@@ -530,28 +603,41 @@ def create_dashboard(df):
     for param in dashboard_parameters:
         if param in df.columns:
             df_param = df[df[param].notnull()]
-            # Simplify the parameter name: keep the text before the first parenthesis and add the unit (from the last parentheses)
-            unit_start = param.rfind("(")
-            if unit_start != -1:
-                unit_str = param[unit_start:].strip()  # e.g., "(°C)"
-                display_param = param.split(" (")[0] + " " + unit_str
+            # Determine the display parameter name.
+            if param.startswith("UV Index"):
+                display_param = "UV Index"
+            elif param.startswith("Wind Speed"):
+                display_param = "Wind Speed (km/h)"
             else:
-                display_param = param
+                # Keep text before the first parenthesis and add the unit from the last parentheses.
+                unit_start = param.rfind("(")
+                if unit_start != -1:
+                    unit_str = param[unit_start:].strip()  # e.g., "(°C)" or "(µg/m³)"
+                    display_param = param.split(" (")[0] + " " + unit_str
+                else:
+                    display_param = param
             
             if df_param.empty:
                 latest_value = "N/A"
                 stats_str = ""
             else:
-                # Latest measurement
+                # Latest measurement (for simplicity, using the row with the max timestamp)
                 latest_row = df_param.loc[df_param["timestamp"].idxmax()]
                 latest_value = latest_row[param]
+                # Special handling for Wind Speed: convert m/s to km/h.
+                if param == "Wind Speed (Anemometer) (m/s)":
+                    latest_value = round(latest_value * 3.6, 1)
                 
                 if extra_stats.get(param) == "minmax":
-                    # Calculate min and max values and their timestamps
+                    # Calculate min and max values and their timestamps.
                     min_val = df_param[param].min()
                     max_val = df_param[param].max()
                     min_row = df_param[df_param[param] == min_val].iloc[0]
                     max_row = df_param[df_param[param] == max_val].iloc[0]
+                    # For wind speed, convert values from m/s to km/h.
+                    if param == "Wind Speed (Anemometer) (m/s)":
+                        min_val = round(min_val * 3.6, 1)
+                        max_val = round(max_val * 3.6, 1)
                     # Format timestamps to show only hour and minute.
                     min_ts = min_row["timestamp"].astimezone(ZoneInfo("Europe/Athens")).strftime("%H:%M")
                     max_ts = max_row["timestamp"].astimezone(ZoneInfo("Europe/Athens")).strftime("%H:%M")
@@ -559,6 +645,8 @@ def create_dashboard(df):
                 elif extra_stats.get(param) == "max":
                     max_val = df_param[param].max()
                     max_row = df_param[df_param[param] == max_val].iloc[0]
+                    if param == "Wind Speed (Anemometer) (m/s)":
+                        max_val = round(max_val * 3.6, 1)
                     max_ts = max_row["timestamp"].astimezone(ZoneInfo("Europe/Athens")).strftime("%H:%M")
                     stats_str = f"Max: {max_val} ({max_ts})"
                 else:
@@ -584,6 +672,49 @@ def create_dashboard(df):
                 ])
             )
     
+    # --- NEW: Add Daily Rainfall and Rain Intensity rows ---
+    # Daily Rainfall: if the column exists, compute (max - min) over the day.
+    if "Rain Accumulation (SEN0575) (mm)" in df.columns:
+        # We assume the CSV data are already filtered to the last 24 hours.
+        daily_rainfall = df["Rain Accumulation (SEN0575) (mm)"].max() - df["Rain Accumulation (SEN0575) (mm)"].min()
+        daily_rainfall = round(daily_rainfall, 1)
+    else:
+        daily_rainfall = "N/A"
+    
+    # Rain Intensity: if it's currently raining (check last row of "Rain Event (LM393)"),
+    # compute difference over the last 60 minutes.
+    if "Rain Accumulation (SEN0575) (mm)" in df.columns and "Rain Event (LM393)" in df.columns:
+        # Check if the last rain event indicates "Rain"
+        if df.iloc[-1]["Rain Event (LM393)"] == "Rain":
+            now_greece = datetime.now(ZoneInfo("Europe/Athens"))
+            df_last60 = df[df["timestamp"] >= now_greece.astimezone(ZoneInfo("UTC")) - timedelta(minutes=60)]
+            if not df_last60.empty:
+                intensity = df_last60["Rain Accumulation (SEN0575) (mm)"].max() - df_last60["Rain Accumulation (SEN0575) (mm)"].min()
+                rain_intensity = round(intensity, 1)
+            else:
+                rain_intensity = "N/A"
+        else:
+            rain_intensity = 0
+    else:
+        rain_intensity = "N/A"
+    
+    # Append new rows for daily rainfall and rain intensity.
+    rows.append(
+        html.Tr([
+            html.Td("Daily Rainfall (mm)", style={"padding": "8px", "border": "1px solid #ccc", "fontSize": "14px"}),
+            html.Td(daily_rainfall, style={"padding": "8px", "border": "1px solid #ccc", "fontSize": "14px"}),
+            html.Td("", style={"padding": "8px", "border": "1px solid #ccc", "fontSize": "14px"})
+        ])
+    )
+    rows.append(
+        html.Tr([
+            html.Td("Rain Intensity (mm/h)", style={"padding": "8px", "border": "1px solid #ccc", "fontSize": "14px"}),
+            html.Td(rain_intensity, style={"padding": "8px", "border": "1px solid #ccc", "fontSize": "14px"}),
+            html.Td("", style={"padding": "8px", "border": "1px solid #ccc", "fontSize": "14px"})
+        ])
+    )
+    # --- End New Rows ---
+
     header_table = html.Thead(
         html.Tr([
             html.Th("Parameter", style={"padding": "8px", "border": "1px solid #ccc", "fontSize": "14px"}),
@@ -615,6 +746,64 @@ def create_dashboard(df):
             "fontFamily": "Roboto, sans-serif"
         }
     )
+
+def create_thermometer_dashboard(df):
+    # Use the BME280 temperature sensor column
+    sensor_col = "Temperature (BME280) (°C)"
+    if sensor_col not in df.columns or df[sensor_col].isnull().all():
+        return go.Figure()  # Return an empty figure if no data
+    
+    # Get current time in Greece and calculate midnight (local)
+    now_greece = datetime.now(ZoneInfo("Europe/Athens"))
+    midnight = now_greece.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Convert midnight to UTC for filtering (timestamps are in UTC)
+    midnight_utc = midnight.astimezone(ZoneInfo("UTC"))
+    
+    # Filter data for today (from midnight onward)
+    df_today = df[df["timestamp"] >= midnight_utc]
+    if df_today.empty:
+        return go.Figure()
+    
+    # Get the latest, minimum, and maximum temperatures for today
+    latest_value = df_today.loc[df_today["timestamp"].idxmax()][sensor_col]
+    min_value = df_today[sensor_col].min()
+    max_value = df_today[sensor_col].max()
+    
+    # Create a gauge (thermometer) using a Plotly Indicator.
+    # Set the gauge range a bit beyond the min and max for aesthetics.
+    gauge_range = [min_value - 1, max_value + 1]
+    fig = go.Figure(go.Indicator(
+        mode = "gauge+number",
+        value = latest_value,
+        title = {"text": "Temperature (°C)"},
+        gauge = {
+            "axis": {"range": gauge_range, "dtick": 1.0},
+            "bar": {"color": "red"},
+            "steps": [
+                {"range": [min_value-0.125, min_value+0.125], "color": "lightblue"},
+                {"range": [max_value-0.125, max_value+0.125], "color": "orange"}
+            ],
+            "threshold": {
+                "line": {"color": "black", "width": 4},
+                "thickness": 0.80,
+                "value": latest_value
+            }
+        }
+    ))
+    
+    # Add an annotation below the gauge for min and max (only hour and minute are relevant here,
+    # but since these are daily aggregates, we display the values without timestamps).
+    fig.add_annotation(
+        x=0.5, y=-0.15,
+        xref="paper", yref="paper",
+        text=f"Min: {min_value} °C, Max: {max_value} °C",
+        showarrow=False,
+        font=dict(size=14)
+    )
+    
+    # Optionally, adjust layout for a mobile-friendly size.
+    fig.update_layout(width=400, height=400, margin=dict(t=50, b=100))
+    return fig
 
 # Updated header: only the clear foreground title remains.
 header = html.Div(
@@ -684,13 +873,14 @@ app.layout = html.Div(
         dcc.Interval(id="interval", interval=5000),
         dcc.Tabs(
             id="tabs",
-            value="Dashboard",  # default to Dashboard
+            value="Dashboard",  # default to the new Dashboard tab (thermometer + wind graphic)
             children=[
                 dcc.Tab(label="Dashboard", value="Dashboard", style=tab_style, selected_style=tab_selected_style),
+                dcc.Tab(label="Weather Summary", value="Weather Summary", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="Temperature", value="Temperature", style=tab_style, selected_style=tab_selected_style),
-                dcc.Tab(label="Humidity", value="Humidity", style=tab_style, selected_style=tab_selected_style),
+                dcc.Tab(label="Relative Humidity", value="Humidity", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="Atmospheric Pressure", value="Atmospheric Pressure", style=tab_style, selected_style=tab_selected_style),
-                dcc.Tab(label="Light Intensity", value="Light Intensity", style=tab_style, selected_style=tab_selected_style),
+                dcc.Tab(label="Ambient Visible Light", value="Light Intensity", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="UV Index", value="UV Index", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="Wind Rose", value="Wind Rose", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="Air Quality Monitoring", value="Air Quality Monitoring", style=tab_style, selected_style=tab_selected_style),
@@ -728,8 +918,87 @@ def create_wind_rose_range(df, time_delta, title_text):
     # Update the title of the wind rose
     fig.update_layout(title=dict(text=title_text, font=title_font))
     return fig
+    
+def create_reflected_wind_direction_figure(mean_wind_speed_kmh, mean_direction):
+    """
+    Invert wind direction across the west-east axis by computing:
+        reflected_angle = (180 - mean_direction) mod 360
+    Then draw a circle with N/E/S/W, and an inward arrow from the perimeter
+    to the center. So if the sensor says 271°, we show 269°, etc.
+    
+    0° => top (N), 90° => right (E), 180° => bottom (S), 270° => left (W).
+    """
 
-# In your callback for tab content:
+    # 1) Reflect the angle
+    #    e.g. 0 -> 180, 45 -> 135, 90 -> 90, 271 -> 269
+    reflected_angle = (180 - mean_direction) % 360
+    
+    # 2) We'll define an x–y data space of [0..1] × [0..1].
+    fig = go.Figure()
+    r = 0.4  # circle radius
+
+    # Draw the circle
+    fig.add_shape(
+        type="circle",
+        xref="x", yref="y",
+        x0=0.5 - r, x1=0.5 + r,
+        y0=0.5 - r, y1=0.5 + r,
+        line=dict(color="black", width=2),
+        fillcolor="white"
+    )
+
+    # Cardinal directions: N=top, E=right, S=bottom, W=left
+    offset = 0.06
+    # N at top => (0.5, 0.5-r-offset)
+    fig.add_annotation(x=0.5, y=0.5 + r + offset, text="N", showarrow=False, font=dict(size=16), xref="x", yref="y")
+    # E at right => (0.5+r+offset, 0.5)
+    fig.add_annotation(x=0.5 + r + offset, y=0.5, text="E", showarrow=False, font=dict(size=16), xref="x", yref="y")
+    # S at bottom => (0.5, 0.5+r+offset)
+    fig.add_annotation(x=0.5, y=0.5 - r - offset, text="S", showarrow=False, font=dict(size=16), xref="x", yref="y")
+    # W at left => (0.5-r-offset, 0.5)
+    fig.add_annotation(x=0.5 - r - offset, y=0.5, text="W", showarrow=False, font=dict(size=16), xref="x", yref="y")
+
+    # 3) Compute arrow coordinates from perimeter to center
+    #    0° => top, 90° => right, 180° => bottom, 270° => left
+    #    x = 0.5 + r*sin(angle), y = 0.5 - r*cos(angle)
+    angle_rad = math.radians(reflected_angle)
+    x_perim = 0.5 + r * math.sin(angle_rad)
+    y_perim = 0.5 - r * math.cos(angle_rad)
+
+    # Arrow from perimeter to center
+    fig.add_annotation(
+        x=0.5, y=0.5,         # arrow head at center
+        ax=x_perim, ay=y_perim,   # arrow tail on perimeter
+        xref="x", yref="y",
+        axref="x", ayref="y",
+        arrowhead=5,
+        arrowwidth=5,
+        arrowcolor="red",
+        showarrow=True
+    )
+
+    # 4) Mean wind speed text in the center
+    fig.add_annotation(
+        x=0.5, y=0.5,
+        xref="x", yref="y",
+        text=f"{mean_wind_speed_kmh} km/h",
+        showarrow=False,
+        font=dict(size=42, color="black")
+    )
+
+    # 5) Hide axes, fix range
+    fig.update_xaxes(range=[0,1], visible=False)
+    fig.update_yaxes(range=[0,1], visible=False)
+
+    fig.update_layout(
+        margin=dict(t=50, b=50, l=50, r=50),
+        width=400,
+        height=400,
+        title=f"Wind: {mean_wind_speed_kmh} km/h, {int(mean_direction)}°"
+    )
+    return fig
+
+
 @app.callback(
     Output("tabs-content", "children"),
     [Input("tabs", "value"),
@@ -737,32 +1006,65 @@ def create_wind_rose_range(df, time_delta, title_text):
 )
 def render_content(tab, n_intervals):
     df = load_data()
+
+    # 1. Dashboard tab: Thermometer + Wind Arrow
     if tab == "Dashboard":
+        # 1) Thermometer
+        thermo_fig = create_thermometer_dashboard(df)
+
+        # 2) Filter data for last 10 minutes
+        now_utc = datetime.now(ZoneInfo("UTC"))
+        df_last10 = df[df["timestamp"] >= now_utc - timedelta(minutes=10)]
+
+        # 3) Check columns
+        if (
+            df_last10.empty or
+            "Wind Speed (Anemometer) (m/s)" not in df_last10.columns or
+            "Wind Direction (Wind Vane) (deg)" not in df_last10.columns
+        ):
+            wind_fig = go.Figure()
+            wind_fig.add_annotation(text="No wind data", showarrow=False, font=dict(size=16))
+        else:
+            mean_wind_speed_mps = df_last10["Wind Speed (Anemometer) (m/s)"].mean()
+            if np.isnan(mean_wind_speed_mps):
+                wind_fig = go.Figure()
+                wind_fig.add_annotation(text="No wind data", showarrow=False, font=dict(size=16))
+            else:
+                mean_wind_speed_kmh = round(mean_wind_speed_mps * 3.6, 1)
+                mean_direction = df_last10["Wind Direction (Wind Vane) (deg)"].tail(10).mean()
+                if np.isnan(mean_direction):
+                    mean_direction = 0
+
+                # 4) Create the circle + arrow figure
+                #wind_fig = create_wind_direction_figure(mean_wind_speed_kmh, mean_direction)
+                #wind_fig = create_inverted_ns_figure(mean_wind_speed_kmh, mean_direction)
+                wind_fig = create_reflected_wind_direction_figure(mean_wind_speed_kmh, mean_direction)
+
+        # 5) Show them side by side
+        content = html.Div(
+            [
+                html.Div(dcc.Graph(figure=thermo_fig, className="dash-graph"), style={"flex": "1", "padding": "10px"}),
+                html.Div(dcc.Graph(figure=wind_fig, className="dash-graph"), style={"flex": "1", "padding": "10px"})
+            ],
+            style={"display": "flex", "flexWrap": "wrap", "justifyContent": "space-around"}
+        )
+
+    
+    elif tab == "Weather Summary":
+        # The old dashboard summary table
         content = create_dashboard(df)
+    
+    # ... other tab branches remain unchanged ...
     elif tab == "Temperature":
         content = dcc.Graph(figure=create_temperature_figure(df), className="dash-graph")
     elif tab == "Humidity":
-        # Update title to "Relative Humidity"
-        content = dcc.Graph(
-            figure=create_line_figure(df, ["Humidity (BME280) (%)"], "Relative Humidity", "%"),
-            className="dash-graph"
-        )
+        content = dcc.Graph(figure=create_line_figure(df, ["Humidity (BME280) (%)"], "Relative Humidity", "%"), className="dash-graph")
     elif tab == "Atmospheric Pressure":
-        content = dcc.Graph(
-            figure=create_line_figure(df, ["Pressure (BME280) (hPa)"], "Atmospheric Pressure", "hPa"),
-            className="dash-graph"
-        )
+        content = dcc.Graph(figure=create_line_figure(df, ["Pressure (BME280) (hPa)"], "Atmospheric Pressure", "hPa"), className="dash-graph")
     elif tab == "Light Intensity":
-        # Update title and y-axis title for Light Intensity
-        content = dcc.Graph(
-            figure=create_line_figure(df, ["Light Intensity (BH1750) (lux)"], "Ambient Visible Light", "Illuminance (lux)"),
-            className="dash-graph"
-        )
+        content = dcc.Graph(figure=create_line_figure(df, ["Light Intensity (BH1750) (lux)"], "Ambient Visible Light", "Illuminance (lux)"), className="dash-graph")
     elif tab == "UV Index":
-        content = dcc.Graph(
-            figure=create_line_figure(df, ["UV Index (GY-8511)"], "UV Index", ""),
-            className="dash-graph"
-        )
+        content = dcc.Graph(figure=create_line_figure(df, ["UV Index (GY-8511)"], "UV Index", ""), className="dash-graph")
     elif tab == "Wind Rose":
         wind_rose_24 = dcc.Graph(
             figure=create_wind_rose_range(df, timedelta(hours=24), "Last 24 hours"),
@@ -783,11 +1085,16 @@ def render_content(tab, n_intervals):
     elif tab == "Air Quality Monitoring":
         content = dcc.Graph(figure=create_air_quality_figure(df), className="dash-graph")
     elif tab == "Rain Accumulation":
-        # Update title and y-axis title for Rain Accumulation
         content = dcc.Graph(
-            figure=create_bar_figure(df, "Rain Accumulation (SEN0575) (mm)", "Rain Accumulation (last 24 hours)", "Precipitation Height (mm)"),
-            className="dash-graph"
-        )
+        figure=create_rain_line_figure(
+            df,
+            "Rain Accumulation (SEN0575) (mm)",
+            "Rain Accumulation (last 24 hours)",
+            "Precipitation Height (mm)"
+        ),
+        className="dash-graph"
+    )
+        
     elif tab == "Cloud Camera":
         img_src = get_latest_cloud_camera_image()
         if img_src is None:
@@ -825,10 +1132,13 @@ def update_station_status(n_intervals):
     df = load_data()
     if df.empty or df["timestamp"].max() is None:
         return html.Div("No data available", style={"color": "gray"})
-    last_ts = df["timestamp"].max()  # Timestamp in UTC
+    
+    # 1) Check last data timestamp => Online/Offline
+    last_ts = df["timestamp"].max()
     last_ts_greece = last_ts.astimezone(ZoneInfo("Europe/Athens"))
     now_greece = datetime.now(ZoneInfo("Europe/Athens"))
     diff_minutes = (now_greece - last_ts_greece).total_seconds() / 60.0
+
     if diff_minutes > 30:
         status_text = "Station is OFFLINE"
         indicator = html.Span(
@@ -856,9 +1166,66 @@ def update_station_status(n_intervals):
                 "marginRight": "10px"
             }
         )
-    ts_str = last_ts_greece.strftime("%Y-%m-%d %H:%M")
+    ts_str = last_ts_greece.strftime("%Y-%m-%d %H:%M:%S")
+
+    # 2) Lightning info
+    if "Lightning Detection (AS3935)" in df.columns:
+        df_lightning = df[df["Lightning Detection (AS3935)"].notnull()]
+        if not df_lightning.empty:
+            latest_lightning_row = df_lightning.loc[df_lightning["timestamp"].idxmax()]
+            lightning_time = latest_lightning_row["timestamp"].astimezone(ZoneInfo("Europe/Athens")).strftime("%Y-%m-%d %H:%M")
+            lightning_distance = latest_lightning_row["Lightning Distance (AS3935) (km)"]
+            
+            lightning_info = html.Div(
+                f"Last Lightning: {lightning_time} (Distance: {lightning_distance} km)",
+                style={"marginTop": "10px", "fontSize": "14px"}
+            )
+        else:
+            lightning_info = html.Div("No lightning detected", style={"marginTop": "10px", "fontSize": "14px"})
+    else:
+        lightning_info = html.Div("No lightning data available", style={"marginTop": "10px", "fontSize": "14px"})
+
+    # 3) Rain status
+    if "Rain Event (LM393)" in df.columns:
+        df_rain = df[df["Rain Event (LM393)"].notnull()]
+        if not df_rain.empty:
+            latest_rain_value = df_rain.iloc[-1]["Rain Event (LM393)"]  # e.g. "Rain" or "No Rain"
+            if latest_rain_value == "Rain":
+                
+                # Create a blinking blue dot to show next to "Rain is happening now"
+                rain_indicator = html.Span(
+                    "",
+                    style={
+                        "display": "inline-block",
+                        "width": "15px",
+                        "height": "15px",
+                        "borderRadius": "50%",
+                        "backgroundColor": "blue",
+                        "marginLeft": "10px",
+                        "animation": "blinker 1s linear infinite"
+                    }
+                )
+                rain_info = html.Div(
+                    ["Rain is happening now", rain_indicator],
+                    style={"marginTop": "10px", "fontSize": "14px"}
+                )
+            elif latest_rain_value == "No Rain":
+                rain_info = html.Div("No rain at the moment", style={"marginTop": "10px", "fontSize": "14px"})
+            else:
+                rain_info = html.Div(f"Rain status: {latest_rain_value}", style={"marginTop": "10px", "fontSize": "14px"})
+        else:
+            rain_info = html.Div("No recent rain data", style={"marginTop": "10px", "fontSize": "14px"})
+    else:
+        rain_info = html.Div("No rain data available", style={"marginTop": "10px", "fontSize": "14px"})
+
+    # Combine everything into one Div
     return html.Div(
-        [indicator, html.Span(f"{status_text} (Last data at: {ts_str})")],
+        [
+            indicator, 
+            html.Span(f"{status_text} (Last data at: {ts_str})"),
+            lightning_info,
+            rain_info
+        ],
         style={
             "fontSize": "16px",
             "fontFamily": "Roboto, sans-serif",
@@ -874,4 +1241,7 @@ def update_station_status(n_intervals):
     )
 
 if __name__ == "__main__":
-    app.run_server(host="0.0.0.0", port=8050, debug=False)
+    app.run(host="0.0.0.0", port=8050, debug=False)
+    
+
+
