@@ -20,7 +20,7 @@ The station is a hybrid system using a central Raspberry Pi and remote ESP32 boa
 * **Wind**: Cup Anemometer & Wind Vane
 * **Air Quality**: Adafruit PMSA003I Air Quality Breakout
 * **Lightning**: DFRobot Gravity: Lightning Sensor
-* **Precipitation**: DFRobotot Gravity: Tipping Bucket Rainfall Sensor
+* **Precipitation**: DFRobot Gravity: Tipping Bucket Rainfall Sensor
 
 ### Remote Sensors (via ESP32 Boards)
 * **Atmospherics**: Waveshare BME280 (Temperature, Humidity, Pressure)
