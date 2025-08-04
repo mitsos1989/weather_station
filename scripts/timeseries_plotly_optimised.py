@@ -1,3 +1,9 @@
+import os, glob, base64
+from dotenv import load_dotenv
+
+# Load environment variables from the .env file
+load_dotenv()
+
 import dash
 from dash import dcc, html, Input, Output
 import pandas as pd
@@ -6,18 +12,18 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta, date
 from zoneinfo import ZoneInfo  # Python 3.9+
-import os, glob, base64
 import io
 import math
 import ephem
 import imageio
 
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-'''
-# Initialize your bot with your API token
-TELEGRAM_BOT_TOKEN = "7490920595:AAENnqGchyNDxMlHeAZIwydUDFH-GCm3an8"
-TELEGRAM_CHAT_ID = "851089620"  # Could be a string or integer
-'''
+if not TELEGRAM_BOT_TOKEN:
+    print("Error: TELEGRAM_BOT_TOKEN not found. Make sure it's set in your .env file.")
+
+
 
 
 # Include Roboto font from Google Fonts
@@ -159,7 +165,7 @@ def get_latest_cloud_camera_image():
     with open(latest_file, "rb") as f:
         encoded = base64.b64encode(f.read()).decode("utf-8")
     return "data:image/jpeg;base64," + encoded
-'''
+
 def get_camera_gif():
     # Get list of jpg files in the whole_sky_camera folder
     files = glob.glob("whole_sky_camera/*.jpg")
@@ -179,7 +185,7 @@ def get_camera_gif():
     # Encode the binary GIF in base64
     gif_base64 = base64.b64encode(gif_bytes.read()).decode("utf-8")
     return "data:image/gif;base64," + gif_base64
-'''
+
 
 
 def get_satellite_image():
@@ -276,8 +282,8 @@ def create_line_figure(df, y_cols, title, ytitle):
         ),
         margin=dict(b=120, t=40, l=60, r=30),
         title=dict(text=title, x=0.05, xanchor="left", font=title_font),
-        width=900,      # <-- ADD THIS LINE BACK
-        height=500,     # <-- ADD THIS LINE BACK
+        width=900,
+        height=500,
         plot_bgcolor="whitesmoke",
         dragmode=False,
         font=common_font,
@@ -333,8 +339,8 @@ def create_bar_figure(df, col, title, ytitle):
         yaxis=yaxis_config,
         margin=dict(b=120, t=40, l=60, r=30),
         title=dict(text=title, x=0.05, xanchor="left", font=title_font),
-        width=900,      # <-- ADD THIS LINE BACK
-        height=500,     # <-- ADD THIS LINE BACK
+        width=900,
+        height=500,
         plot_bgcolor="whitesmoke",
         dragmode=False,
         font=common_font,
@@ -359,7 +365,7 @@ def create_rain_line_figure(df, col, title, ytitle):
                 mode="lines",
                 name=col.split(" (")[0],
                 line=dict(width=2, color="blue"),
-                connectgaps=True  # <-- Add this to connect the non-NaN points
+                connectgaps=True
             )
         )
 
@@ -372,7 +378,7 @@ def create_rain_line_figure(df, col, title, ytitle):
         showline=True,
         linewidth=2,
         linecolor="#303030",
-        rangemode="tozero"  # ensures y-axis starts at 0
+        rangemode="tozero"
     )
 
     fig.update_layout(
@@ -392,8 +398,8 @@ def create_rain_line_figure(df, col, title, ytitle):
         yaxis=yaxis_config,
         margin=dict(b=120, t=40, l=60, r=30),
         title=dict(text=title, x=0.05, xanchor="left", font=title_font),
-        width=900,      # <-- ADD THIS LINE BACK
-        height=500,     # <-- ADD THIS LINE BACK
+        width=900,
+        height=500,
         plot_bgcolor="whitesmoke",
         dragmode=False,
         font=common_font,
@@ -451,7 +457,7 @@ def create_wind_rose(df):
             r="frequency",
             theta="cardinal",
             color="strength",
-            labels={"strength": "Wind Speed (m/s)"},  # Updated legend title
+            labels={"strength": "Wind Speed (m/s)"},
             template="plotly_white",
             color_discrete_sequence=px.colors.sequential.Plasma_r,
             direction="clockwise",
@@ -547,8 +553,8 @@ def create_temperature_figure(df):
         ),
         margin=dict(b=120, t=40, l=60, r=30),
         title=dict(text="Temperature", x=0.05, xanchor="left", font=dict(size=20, family="Roboto, sans-serif")),
-        width=900,      # <-- ADD THIS LINE BACK
-        height=500,     # <-- ADD THIS LINE BACK
+        width=900,
+        height=500,
         plot_bgcolor="whitesmoke",
         dragmode=False,
         legend=dict(
@@ -643,8 +649,8 @@ def create_air_quality_figure(df):
         ),
         margin=dict(b=80, t=40, l=60, r=100),
         title=dict(text="Air Quality Monitoring", x=0.05, xanchor="left", font=title_font),
-        width=900,      # <-- ADD THIS LINE BACK
-        height=500,     # <-- ADD THIS LINE BACK
+        width=900,
+        height=500,
         plot_bgcolor="whitesmoke",
         dragmode=False,
         font=common_font,
@@ -763,8 +769,8 @@ def create_wind_timeseries_figure(df):
             side="right"
         ),
         margin=dict(b=120, t=40, l=60, r=30),
-        width=900,      # <-- ADD THIS LINE BACK
-        height=500,     # <-- ADD THIS LINE BACK
+        width=900,
+        height=500,
         plot_bgcolor="whitesmoke",
         dragmode=False,
         font=common_font,
@@ -960,17 +966,17 @@ def create_dashboard(df):
                 else:
                     stats_str = ""
 
-            # For PM parameters, if the latest and maximum values exceed thresholds, apply bold red styling.
-            value_style = {}
-            if param in pm_thresholds and not df_param.empty:
-                threshold = pm_thresholds[param]
-                if latest_value > threshold:
-                    if extra_stats.get(param) == "minmax":
-                        max_val = df_param[param].max()
-                    else:
-                        max_val = None
-                    if (max_val is not None and max_val > threshold) or (max_val is None):
-                        value_style = {"color": "red", "fontWeight": "bold"}
+                # For PM parameters, if the latest and maximum values exceed thresholds, apply bold red styling.
+                value_style = {}
+                if param in pm_thresholds and not df_param.empty:
+                    threshold = pm_thresholds[param]
+                    if latest_value > threshold:
+                        if extra_stats.get(param) == "minmax":
+                            max_val = df_param[param].max()
+                        else:
+                            max_val = None
+                        if (max_val is not None and max_val > threshold) or (max_val is None):
+                            value_style = {"color": "red", "fontWeight": "bold"}
 
             rows.append(
                 html.Tr([
@@ -993,7 +999,7 @@ def create_dashboard(df):
     # compute difference over the last 60 minutes.
     if "Rain Accumulation (SEN0575) (mm)" in df.columns and "Rain Event (LM393)" in df.columns:
         # Check if the last rain event indicates "Rain"
-        if df.iloc[-1]["Rain Event (LM393)"] == "Rain":
+        if not df[df["Rain Event (LM393)"].notnull()].empty and df[df["Rain Event (LM393)"].notnull()].iloc[-1]["Rain Event (LM393)"] == "Rain":
             now_greece = datetime.now(ZoneInfo("Europe/Athens"))
             df_last60 = df[df["timestamp"] >= now_greece.astimezone(ZoneInfo("UTC")) - timedelta(minutes=60)]
             if not df_last60.empty:
@@ -1109,7 +1115,7 @@ def create_thermometer_dashboard(df):
     fig.add_annotation(
         x=0.5, y=-0.15,
         xref="paper", yref="paper",
-        text=f"Min: {min_value} °C, Max: {max_value} °C",
+        text=f"Min: {min_value:.1f} °C, Max: {max_value:.1f} °C",
         showarrow=False,
         font=dict(size=14)
     )
@@ -1188,23 +1194,47 @@ footer = html.Footer(
     }
 )
 
-# Define smaller tab styling
+
+# <<< MODIFIED: Redesigned tab styling to allow text wrapping within each tab.
 tab_style = {
-    "padding": "5px 10px",
-    "fontSize": "12px",
-    "minHeight": "30px",
-    "fontFamily": "Roboto, sans-serif",
-    
+    'padding': '8px 12px',
+    'fontSize': '14px',
+    'fontFamily': 'Roboto, sans-serif',
+    'border': '1px solid #ccc',
+    'borderBottom': 'none',
+    'borderRadius': '5px 5px 0 0',
+    'backgroundColor': '#f8f8f8',
+    'margin': '2px 2px 0 2px',
+    'cursor': 'pointer',
+    'minHeight': '40px',          # Give space for two lines of text
+    'display': 'flex',            # Use flexbox for vertical alignment
+    'alignItems': 'center',       # Center text vertically
+    'justifyContent': 'center',   # Center text horizontally
+    'textAlign': 'center',        # Ensure text is centered if it wraps
+    'flex': '1 1 0',              # Allow tabs to grow and shrink as needed
+    'minWidth': '120px'           # Set a minimum width for shorter tabs
 }
+
 tab_selected_style = {
-    "padding": "5px 10px",
-    "fontSize": "12px",
-    "minHeight": "30px",
-    "fontFamily": "Roboto, sans-serif",
-    "backgroundColor": "#ddd",
-    "borderBottom": "2px solid #333",
-    
+    'padding': '8px 12px',
+    'fontSize': '14px',
+    'fontFamily': 'Roboto, sans-serif',
+    'border': '1px solid #ccc',
+    'borderBottom': '1px solid white',
+    'borderRadius': '5px 5px 0 0',
+    'backgroundColor': 'white',
+    'fontWeight': 'bold',
+    'margin': '2px 2px 0 2px',
+    'cursor': 'pointer',
+    'minHeight': '40px',
+    'display': 'flex',
+    'alignItems': 'center',
+    'justifyContent': 'center',
+    'textAlign': 'center',
+    'flex': '1 1 0',
+    'minWidth': '120px'
 }
+
 
 # Station status indicator placeholder (we'll update its content via a callback)
 station_status = html.Div(id="station-status", style={"textAlign": "center", "marginBottom": "20px"})
@@ -1218,7 +1248,7 @@ app.layout = html.Div(
         dcc.Interval(id="interval", interval=5000),
         dcc.Tabs(
             id="tabs",
-            value="Dashboard",  # default to the new Dashboard tab (thermometer + wind graphic)
+            value="Dashboard",
             children=[
                 dcc.Tab(label="Dashboard", value="Dashboard", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="Weather Summary", value="Weather Summary", style=tab_style, selected_style=tab_selected_style),
@@ -1228,7 +1258,7 @@ app.layout = html.Div(
                 dcc.Tab(label="Ambient Visible Light", value="Light Intensity", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="UV Index", value="UV Index", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="Wind Rose", value="Wind Rose", style=tab_style, selected_style=tab_selected_style),
-                dcc.Tab(label="Wind Time Series", value="Wind Time Series", style=tab_style, selected_style=tab_selected_style), # <<< NEW TAB ADDED
+                dcc.Tab(label="Wind Time Series", value="Wind Time Series", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="Air Quality Monitoring", value="Air Quality Monitoring", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="Rain Accumulation", value="Rain Accumulation", style=tab_style, selected_style=tab_selected_style),
                 dcc.Tab(label="Cloud Camera", value="Cloud Camera", style=tab_style, selected_style=tab_selected_style),
@@ -1238,8 +1268,9 @@ app.layout = html.Div(
             ],
             persistence=True,
             persistence_type="session",
-            # Use a more responsive grid for tabs
-            style={"display": "grid", "gridTemplateColumns": "repeat(auto-fit, minmax(125px, 1fr))"}
+            # <<< MODIFIED: This style makes the container of the tabs a flexible, wrapping row.
+            style={'display': 'flex', 'flexWrap': 'wrap'},
+            content_style={'border': '1px solid #ccc', 'borderTop': 'none', 'padding': '10px'}
         ),
         html.Div(id="tabs-content", style={"transition": "opacity 0.5s ease"}),
         footer
@@ -1316,7 +1347,7 @@ def create_reflected_wind_direction_figure(mean_wind_speed_kmh, mean_direction):
 
     # Arrow from perimeter to center
     fig.add_annotation(
-        x=0.5, y=0.5,           # arrow head at center
+        x=0.5, y=0.5,          # arrow head at center
         ax=x_perim, ay=y_perim,  # arrow tail on perimeter
         xref="x", yref="y",
         axref="x", ayref="y",
@@ -1383,9 +1414,6 @@ def render_content(tab, n_intervals):
                 if np.isnan(mean_direction):
                     mean_direction = 0
 
-                # 4) Create the circle + arrow figure
-                #wind_fig = create_wind_direction_figure(mean_wind_speed_kmh, mean_direction)
-                #wind_fig = create_inverted_ns_figure(mean_wind_speed_kmh, mean_direction)
                 wind_fig = create_reflected_wind_direction_figure(mean_wind_speed_kmh, mean_direction)
 
         # 5) Show them side by side
@@ -1399,10 +1427,8 @@ def render_content(tab, n_intervals):
 
 
     elif tab == "Weather Summary":
-        # The old dashboard summary table
         content = create_dashboard(df)
 
-    # ... other tab branches remain unchanged ...
     elif tab == "Temperature":
         content = dcc.Graph(figure=create_temperature_figure(df), className="dash-graph")
     elif tab == "Humidity":
@@ -1430,7 +1456,6 @@ def render_content(tab, n_intervals):
             [wind_rose_24, wind_rose_1, wind_rose_10],
             style={"display": "flex", "justifyContent": "space-around", "flexWrap": "wrap"}
         )
-    # --- MODIFIED CALLBACK ---
     elif tab == "Wind Time Series":
         content = dcc.Graph(
             figure=create_wind_timeseries_figure(df),
