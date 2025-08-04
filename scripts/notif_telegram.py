@@ -1,3 +1,9 @@
+import os, glob, base64
+from dotenv import load_dotenv
+
+# Load environment variables from the .env file
+load_dotenv()
+
 import asyncio
 import telegram
 import pandas as pd
@@ -7,9 +13,11 @@ from zoneinfo import ZoneInfo
 
 
 
-# Initialize your bot with your API token
-TELEGRAM_BOT_TOKEN = "7490920595:AAENnqGchyNDxMlHeAZIwydUDFH-GCm3an8"
-TELEGRAM_CHAT_ID = "851089620"  # Could be a string or integer
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+if not TELEGRAM_BOT_TOKEN:
+    print("Error: TELEGRAM_BOT_TOKEN not found. Make sure it's set in your .env file.")
 
 bot = telegram.Bot(token=TELEGRAM_BOT_TOKEN)
 
